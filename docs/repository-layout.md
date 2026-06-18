@@ -22,7 +22,10 @@ compact and omits build output such as `target/`.
 ├── docs/
 │   ├── contents.md
 │   ├── developers-guide.md
+│   ├── rentaneko-design.md
 │   ├── repository-layout.md
+│   ├── roadmap.md
+│   ├── terms-of-reference.md
 │   ├── users-guide.md
 │   └── ...
 ├── src/
@@ -59,6 +62,11 @@ compact and omits build output such as `target/`.
   public build and test commands.
 - `docs/developers-guide.md`: Explains the contributor workflow and local
   tooling used to work on the generated project.
+- `docs/terms-of-reference.md`: Defines the prototype problem space, users,
+  scope, constraints, and open questions.
+- `docs/rentaneko-design.md`: Specifies the Rentaneko walking skeleton and its
+  boundary with Podbot and Simulacat Core.
+- `docs/roadmap.md`: Sequences the prototype work and deferred extensions.
 - `docs/repository-layout.md`: Documents the repository tree and path
   responsibilities.
 
