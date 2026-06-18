@@ -1,0 +1,29 @@
+name: Act Validation
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  act-validation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ACT_VERSION: v0.2.80
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
+        with:
+          persist-credentials: false
+      - name: Setup Rust
+        uses: leynos/shared-actions/.github/actions/setup-rust@455d9ed03477c0026da96c2541ca26569a74acac
+      - name: Install act
+        run: |
+          curl -fsSL "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" |
+            sudo tar -xz -C /usr/local/bin act
+      - name: Check Docker runtime
+        run: docker info
+      - name: Run tests with act validation
+        run: make test WITH_ACT=1

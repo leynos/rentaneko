@@ -1,0 +1,107 @@
+name: CI
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+      BUILD_PROFILE: debug
+      WHITAKER_INSTALLER_REV: f768c2e53c47df13658af1168a67851d388750bf
+    steps:
+      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
+        with:
+          persist-credentials: false
+      - name: Setup Rust
+        uses: leynos/shared-actions/.github/actions/setup-rust@455d9ed03477c0026da96c2541ca26569a74acac
+      - name: Install mold linker
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          # mold accelerates dev builds; coverage uses lld for llvm-tools compatibility.
+          sudo apt-get update \
+            && sudo apt-get install --yes --no-install-recommends clang lld mold
+      - name: Format
+        run: make check-fmt
+      - name: Markdown lint
+        uses: DavidAnson/markdownlint-cli2-action@2df9e28eb87988518ef3880c34edad45d65b1668
+        with:
+          globs: |
+            **/*.md
+            !**/target/**
+            !**/dist/**
+      - name: Setup uv
+        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
+      - name: Install test runner
+        env:
+          RUSTFLAGS: ""
+        run: cargo binstall --no-confirm cargo-nextest
+      - name: Install cargo-audit
+        env:
+          RUSTFLAGS: ""
+        run: cargo binstall --no-confirm cargo-audit
+      - name: Setup Python for audit manifest extraction
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.x'
+      - name: Cache Whitaker installation
+        id: cache-whitaker
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/.cargo/bin/whitaker-installer
+            ~/.local/bin/whitaker
+            ~/.dylint_drivers
+            ~/.local/share/whitaker
+          key: whitaker-v2-${{ runner.os }}-${{ env.WHITAKER_INSTALLER_REV }}
+      - name: Install Whitaker
+        env:
+          RUSTFLAGS: ""
+        run: |
+          set -euo pipefail
+          echo "Whitaker cache hit: ${{ steps.cache-whitaker.outputs.cache-hit }}"
+          if [ "${{ steps.cache-whitaker.outputs.cache-hit }}" != "true" ]; then
+            echo "Installing Whitaker installer at ${WHITAKER_INSTALLER_REV}"
+            cargo install --locked \
+              --git https://github.com/leynos/whitaker \
+              --rev "${WHITAKER_INSTALLER_REV}" \
+              whitaker-installer
+          fi
+          whitaker-installer --cranelift
+          echo "Whitaker binary: $(command -v whitaker || true)"
+      - name: Audit dependencies
+        run: make audit
+      - name: Lint
+        run: make lint
+      - name: Log coverage linker configuration
+        run: |
+          echo "Coverage linker: clang"
+          echo "Coverage RUSTFLAGS: -C link-arg=-fuse-ld=lld"
+          echo "Coverage CFLAGS: -fuse-ld=lld"
+          echo "Coverage LDFLAGS: -fuse-ld=lld"
+      - name: Test and Measure Coverage
+        uses: leynos/shared-actions/.github/actions/generate-coverage@455d9ed03477c0026da96c2541ca26569a74acac
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+          RUSTFLAGS: -C link-arg=-fuse-ld=lld
+          CFLAGS: -fuse-ld=lld
+          LDFLAGS: -fuse-ld=lld
+        with:
+          output-path: lcov.info
+          format: lcov
+      - name: Upload coverage data to CodeScene
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+        if: ${{ env.CS_ACCESS_TOKEN }}
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@455d9ed03477c0026da96c2541ca26569a74acac
+        with:
+          format: lcov
+          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
