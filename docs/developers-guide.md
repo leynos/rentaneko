@@ -1,16 +1,16 @@
 # Developer Guide
 
-This guide explains the contributor workflow for the generated
-Rentaneko project.
+This guide explains the contributor workflow for the generated Rentaneko
+project.
 
 ## Local Workflow
 
 Use `make all` as the public entrypoint for formatting, linting, and tests.
 `make lint` runs rustdoc, Clippy, and Whitaker. `make test` prefers
 `cargo nextest run` and falls back to `cargo test` when cargo-nextest is not
-available. `make audit` derives the Rust workspace root with
-`cargo metadata`, logs workspace member manifests, and runs `cargo audit` once
-from the workspace root. `make coverage` uses `cargo llvm-cov` with `lld`.
+available. `make audit` derives the Rust workspace root with `cargo metadata`,
+logs workspace member manifests, and runs `cargo audit` once from the workspace
+root. `make coverage` uses `cargo llvm-cov` with `lld`.
 
 GitHub Actions Act validation lives in `.github/workflows/act-validation.yml`.
 The main `.github/workflows/ci.yml` workflow deliberately does not run
@@ -29,8 +29,8 @@ full generated workflow locally on Linux.
 
 ### Security audit ignores
 
-Security audit jobs may set `CARGO_AUDIT_IGNORES` for narrowly scoped
-RustSec advisories that affect unused or tooling-only dependency paths. Keep
-each ignore tied to a documented runtime impact analysis, and remove it when
-the affected dependency leaves the graph or the project starts using the
-advised runtime path.
+Security audit jobs may set `CARGO_AUDIT_IGNORES` for narrowly scoped RustSec
+advisories that affect unused or tooling-only dependency paths. Keep each
+ignore tied to a documented runtime impact analysis, and remove it when the
+affected dependency leaves the graph or the project starts using the advised
+runtime path.

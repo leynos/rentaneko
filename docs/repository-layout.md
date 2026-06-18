@@ -1,8 +1,8 @@
 # Repository layout
 
-This document describes the generated Rentaneko repository layout. It
-is the canonical reference for where source code, tests, configuration,
-automation, and long-lived documentation belong.
+This document describes the generated Rentaneko repository layout. It is the
+canonical reference for where source code, tests, configuration, automation,
+and long-lived documentation belong.
 
 ## Top-level tree
 
