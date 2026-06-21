@@ -166,10 +166,9 @@ call, so the filesystem test does not hide a broken client boundary.
 
 ## 9. Open questions
 
-| Question                                                              | Why it matters                                                                    | Resolution path                                                                          |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Should Simulacat Core add `GET /app` before or after the 3.3.1 proof? | Credential validation uses `GET /app`, but 3.3.1 only requires token acquisition. | Defer unless Podbot cannot bypass startup credential validation in the integration test. |
-| How should token sequencing be represented for Podbot 3.3.2?          | Refresh-loop tests need token A then token B, expiry control, and failure modes.  | Capture in a later design update after 3.3.1 lands.                                      |
+| Question                                                     | Why it matters                                                                   | Resolution path                                     |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------- |
+| How should token sequencing be represented for Podbot 3.3.2? | Refresh-loop tests need token A then token B, expiry control, and failure modes. | Capture in a later design update after 3.3.1 lands. |
 
 ## Handoff
 
