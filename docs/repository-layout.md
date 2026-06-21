@@ -1,8 +1,8 @@
 # Repository layout
 
-This document describes the generated Rentaneko repository layout. It
-is the canonical reference for where source code, tests, configuration,
-automation, and long-lived documentation belong.
+This document describes the generated Rentaneko repository layout. It is the
+canonical reference for where source code, tests, configuration, automation,
+and long-lived documentation belong.
 
 ## Top-level tree
 
@@ -20,9 +20,13 @@ compact and omits build output such as `target/`.
 │       ├── ci.yml
 
 ├── docs/
+│   ├── adr-001-use-simulacat-core-for-octocrab-spike.md
 │   ├── contents.md
 │   ├── developers-guide.md
+│   ├── rentaneko-design.md
 │   ├── repository-layout.md
+│   ├── roadmap.md
+│   ├── terms-of-reference.md
 │   ├── users-guide.md
 │   └── ...
 ├── src/
@@ -53,12 +57,19 @@ compact and omits build output such as `target/`.
 
 - `docs/`: Holds long-lived reference documentation, guides, style rules, and
   design material.
+- `docs/adr-*.md`: Records accepted and proposed Architecture Decision Records
+  (ADRs) for substantive design choices.
 - `docs/contents.md`: Indexes the documentation set and should be updated when
   documentation files are added, renamed, or removed.
 - `docs/users-guide.md`: Explains how to use the generated project and its
   public build and test commands.
 - `docs/developers-guide.md`: Explains the contributor workflow and local
   tooling used to work on the generated project.
+- `docs/terms-of-reference.md`: Defines the prototype problem space, users,
+  scope, constraints, and open questions.
+- `docs/rentaneko-design.md`: Specifies the Rentaneko walking skeleton and its
+  boundary with Podbot and Simulacat Core.
+- `docs/roadmap.md`: Sequences the prototype work and deferred extensions.
 - `docs/repository-layout.md`: Documents the repository tree and path
   responsibilities.
 

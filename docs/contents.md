@@ -5,6 +5,14 @@ documentation set.
 
 ## Project guides
 
+- [Terms of reference](terms-of-reference.md) defines the problem space, users,
+  scope, constraints, and open questions for the Rentaneko prototype.
+- [Rentaneko prototype design](rentaneko-design.md) specifies the walking
+  skeleton for the Podbot 3.3.1 token-writer spike.
+- [ADR 001: Use Simulacat Core for the Octocrab spike](adr-001-use-simulacat-core-for-octocrab-spike.md)
+  records the backend decision, fail-fast compatibility checkpoint, and
+  process-contract requirements.
+- [Roadmap](roadmap.md) sequences the prototype work and deferred extensions.
 - [User guide](users-guide.md) explains how to use the generated project and
   its public build and test commands.
 - [Developer guide](developers-guide.md) explains the local workflow and
