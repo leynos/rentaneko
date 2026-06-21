@@ -164,7 +164,10 @@ call, so the filesystem test does not hide a broken client boundary.
 - `octocrab` 0.51.0 compatibility for Podbot's current dependency graph.
 - `rstest` fixture usage in the consuming Rust test suite.
 
-## 9. Open questions
+## 9. Deferred questions
+
+These questions are outside the active 3.3.1 proof boundary. They should be
+revisited only when Rentaneko starts supporting later Podbot refresh-loop work.
 
 | Question                                                     | Why it matters                                                                   | Resolution path                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------- |
