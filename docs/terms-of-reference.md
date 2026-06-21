@@ -166,19 +166,19 @@ call, so the filesystem test does not hide a broken client boundary.
 
 ## 9. Open questions
 
-| Question                                                                                                                    | Why it matters                                                                           | Resolution path                                                                          |
-| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Should Rentaneko expose reusable `rstest` fixtures directly, or only ordinary constructors that consumers wrap in fixtures? | Direct fixture exports improve ergonomics but add a public test-framework surface early. | Resolve after the first Podbot integration test shows the smallest useful call site.     |
-| Should Simulacat Core add `GET /app` before or after the 3.3.1 proof?                                                       | Credential validation uses `GET /app`, but 3.3.1 only requires token acquisition.        | Defer unless Podbot cannot bypass startup credential validation in the integration test. |
-| How should token sequencing be represented for Podbot 3.3.2?                                                                | Refresh-loop tests need token A then token B, expiry control, and failure modes.         | Capture in a later design update after 3.3.1 lands.                                      |
+| Question                                                                                          | Why it matters                                                                             | Resolution path                                                                                  |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Should the thin `OctocrabFixture` wrapper remain prototype-only or become a stable public helper? | The design resolves the core API as constructor-shaped, but wrapper stability is separate. | Resolve after the first Podbot integration test shows whether the wrapper earns its API surface. |
+| Should Simulacat Core add `GET /app` before or after the 3.3.1 proof?                             | Credential validation uses `GET /app`, but 3.3.1 only requires token acquisition.          | Defer unless Podbot cannot bypass startup credential validation in the integration test.         |
+| How should token sequencing be represented for Podbot 3.3.2?                                      | Refresh-loop tests need token A then token B, expiry control, and failure modes.           | Capture in a later design update after 3.3.1 lands.                                              |
 
 ## Handoff
 
 The terms of reference is sufficient to begin the design and roadmap for the
 prototype. Candidate future Architecture Decision Records (ADRs) are:
 
-- whether Rentaneko's first public API exports `rstest` fixtures or framework
-  neutral constructors;
+- whether the thin `OctocrabFixture` wrapper remains a prototype convenience or
+  becomes a stable public helper;
 - whether Simulacat Core should treat Octocrab compatibility as a first-class
   roadmap lane alongside `github3.py`.
 

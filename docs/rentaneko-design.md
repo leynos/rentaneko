@@ -304,8 +304,6 @@ The integration test should make one narrow assertion chain:
 3. Call `acquire_installation_token_with_client` with installation ID `2000`.
 4. Pass the returned token string to Podbot's token-file writer.
 5. Assert that the final token file contains `FAKE_GITHUB_TOKEN`.
-6. Assert directory mode `0700`, file mode `0600`, and no published temporary
-   token file.
 
 Podbot should test atomicity separately with large old and new token values,
 concurrent readers, and the invariant that every read returns either the full

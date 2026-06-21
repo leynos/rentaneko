@@ -163,10 +163,10 @@ terms-of-reference.md §§5-7 and rentaneko-design.md §11.
 - [ ] 2.1.2. Feed the acquired token into Podbot's runtime token-file writer.
   - Requires 2.1.1 and Podbot roadmap task 3.3.1.
   - See rentaneko-design.md §§11 and 14.
-  - Assert final token contents, directory mode `0700`, token-file mode
-    `0600`, and removal of temporary token files.
-  - Success: Podbot proves the 3.3.1 filesystem result using a token that came
-    through real `octocrab`.
+  - Write the acquired token through Podbot's writer without asserting
+    Rentaneko-owned filesystem details.
+  - Success: Podbot observes `FAKE_GITHUB_TOKEN` after it passes through real
+    `octocrab` and the token-file writer.
 
 ### 2.2. Keep atomicity proof in Podbot
 
