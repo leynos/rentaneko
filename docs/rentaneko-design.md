@@ -53,6 +53,10 @@ fails. The Python prior art already uses an operating-system-assigned port and
 a bounded terminate-then-kill cleanup path. Rentaneko should copy those proven
 parts, but it must add parent-death cleanup through runner stdin because the
 searched Simulacat fixture surfaces do not provide that orphan-process guard.
+On Linux, a forceful kill of the parent test process normally closes the
+parent-side pipe file descriptor, so stdin EOF covers the common orphan case in
+practice. A stray-runner reaper remains a cheap CI backstop if later evidence
+shows leaked Bun processes.
 
 Simulacat Core already exposes `simulation(args)` with `initialState` and
 `apiUrl` arguments. Its current capability matrix lists an installation-token
@@ -251,7 +255,10 @@ second process-start or teardown path.
 parent-side stdin pipe, send graceful termination when the process is still
 running, wait for a bounded interval, then kill and wait for a shorter bounded
 interval if the child remains alive. The drop path is best effort and should
-not inspect or kill unrelated processes.
+not inspect or kill unrelated processes. The exact wait durations are
+implementation constants, not design-level policy; they should be short enough
+to keep failed test teardown responsive and long enough to let Simulacat Core
+run its normal shutdown handler on typical CI runners.
 
 An optional convenience wrapper can own the simulator and client together:
 

@@ -88,7 +88,8 @@ by Rentaneko-side tests.
 - The Bun runner must bind `127.0.0.1:0` and report the actual port.
 - Runner stdout must use a versioned newline-delimited JSON event contract.
 - Rust teardown must be synchronous in `Drop`: bounded graceful shutdown,
-  followed by a bounded kill fallback.
+  followed by a bounded kill fallback. Exact durations are implementation
+  constants rather than ADR policy.
 - The runner must self-terminate when its parent-side stdin closes, so a normal
   fixture drop does not rely solely on signal delivery.
 - Rentaneko must include a drift tripwire that starts the packaged runner and
@@ -100,9 +101,11 @@ by Rentaneko-side tests.
   need to debug Rust async code, `octocrab`, Bun, and Simulacat Core together.
   This is an accepted cost because Rentaneko's product goal is a reusable
   simulator-backed fixture, not a one-off Podbot stub.
-- Parent-death cleanup cannot handle a forceful `SIGKILL` of the entire test
-  process unless the operating system also closes the runner's inherited stdin
-  or a later platform-specific parent-death mechanism is added.
+- Parent-death cleanup relies on runner stdin reaching end-of-file. On Linux,
+  forcefully killing the parent test process normally closes the parent-side
+  pipe file descriptor, so this covers the common hard-abort case in practice.
+  If CI later shows leaked Bun processes, a narrow stray-runner reaper should
+  be added as the backstop rather than expanding the fixture API.
 - Simulacat Core can still drift. The Rentaneko-side drift tripwire is required
   because an upstream Simulacat Core contract test alone does not protect
   Rentaneko users who update dependencies independently.
