@@ -26,6 +26,7 @@ compact and omits build output such as `target/`.
 │   ├── rentaneko-design.md
 │   ├── repository-layout.md
 │   ├── roadmap.md
+│   ├── rstest-bdd-users-guide.md
 │   ├── terms-of-reference.md
 │   ├── users-guide.md
 │   └── ...
@@ -70,6 +71,8 @@ compact and omits build output such as `target/`.
 - `docs/rentaneko-design.md`: Specifies the Rentaneko walking skeleton and its
   boundary with Podbot and Simulacat Core.
 - `docs/roadmap.md`: Sequences the prototype work and deferred extensions.
+- `docs/rstest-bdd-users-guide.md`: Preserves the upstream `rstest-bdd` v0.5.0
+  user guide as local reference material.
 - `docs/repository-layout.md`: Documents the repository tree and path
   responsibilities.
 

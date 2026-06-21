@@ -30,6 +30,8 @@ documentation set.
   filesystem, and other external dependencies.
 - [Rust doctest Don't Repeat Yourself guide](rust-doctest-dry-guide.md)
   explains how to write maintainable, executable Rust documentation examples.
+- [`rstest-bdd` user's guide](rstest-bdd-users-guide.md) preserves the
+  upstream `rstest-bdd` v0.5.0 user guide as local reference material.
 - [Rust testing with `rstest` fixtures](rust-testing-with-rstest-fixtures.md)
   explains fixture-based, parameterized, and asynchronous testing with `rstest`.
 
