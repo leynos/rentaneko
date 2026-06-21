@@ -3,10 +3,9 @@
 - **Status:** Draft v0.1.
 - **Audience:** Rentaneko maintainers, Podbot maintainers, Simulacat Core
   maintainers, and reviewers evaluating the prototype boundary.
-- **Companion documents:** [Rentaneko design](rentaneko-design.md),
-  [roadmap](roadmap.md), [documentation contents](contents.md), and
-  [repository layout](repository-layout.md).
-- **Last updated:** 2026-06-18.
+- **Companion documents:** This document is read with the design, ADR 001,
+  roadmap, documentation contents, and repository-layout guide.
+- **Last updated:** 2026-06-21.
 
 ## 1. Background and motivation
 
@@ -44,12 +43,13 @@ cloning, rate limiting, or GitHub's full authentication and authorization rules.
 The practical alternatives are narrow and already visible in the adjacent
 repositories.
 
-| Alternative            | Current value                     | Deficiency for this spike                                                                        |
-| ---------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Handwritten Rust mocks | Fast unit tests for Podbot traits | They do not exercise `octocrab` request construction, authentication state, or response parsing. |
-| Wire-level HTTP stubs  | Can return GitHub-shaped JSON     | They duplicate simulator behaviour and drift away from Simulacat Core.                           |
-| Simulacat              | Proven pytest process fixture     | It is Python- and `github3.py`-shaped, and its GitHub App support is metadata-only.              |
-| Live GitHub            | Highest fidelity                  | It requires network access, real credentials, and mutable external state.                        |
+| Alternative            | Current value                                              | Deficiency for this spike                                                                          |
+| ---------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Handwritten Rust mocks | Fast unit tests for Podbot traits                          | They do not exercise `octocrab` request construction, authentication state, or response parsing.   |
+| In-process HTTP stub   | Proves one fixed token route with minimal operational risk | It duplicates simulator payloads and provides no reuse for refresh or repository-preflight slices. |
+| Wire-level HTTP stubs  | Can return GitHub-shaped JSON                              | They duplicate simulator behaviour and drift away from Simulacat Core.                             |
+| Simulacat              | Proven pytest process fixture                              | It is Python- and `github3.py`-shaped, and its GitHub App support is metadata-only.                |
+| Live GitHub            | Highest fidelity                                           | It requires network access, real credentials, and mutable external state.                          |
 
 _Table 1: Alternatives for Podbot GitHub App token tests._
 
@@ -131,6 +131,9 @@ call, so the filesystem test does not hide a broken client boundary.
 - The simulator backend remains Simulacat Core.
 - The Rust client boundary remains `octocrab`; Rentaneko must not swap in a
   bespoke HTTP client for the proof.
+- A static in-process HTTP stub may be used only as a diagnostic aid for
+  isolating `octocrab` response parsing. It is not the Rentaneko backend for
+  the Podbot integration proof.
 - The test framework target is `rstest`, matching Podbot's current test
   texture.
 - The first Podbot consumer is roadmap task 3.3.1, not the full Git clone
@@ -141,7 +144,8 @@ call, so the filesystem test does not hide a broken client boundary.
 ### 8.2. Assumptions
 
 - Simulacat Core's existing installation-token route is compatible with the
-  `octocrab` method Podbot uses. If this fails, the spike must add an upstream
+  `octocrab` method Podbot uses. The roadmap now proves this before process
+  lifecycle work; if the checkpoint fails, the spike must add an upstream
   Simulacat Core contract task before expanding Rentaneko.
 - Podbot can construct or accept a simulator-pointed `Octocrab` client for the
   integration proof. If the production seam is too closed, Podbot must add a
@@ -165,7 +169,6 @@ call, so the filesystem test does not hide a broken client boundary.
 | Question                                                                                                                    | Why it matters                                                                           | Resolution path                                                                          |
 | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Should Rentaneko expose reusable `rstest` fixtures directly, or only ordinary constructors that consumers wrap in fixtures? | Direct fixture exports improve ergonomics but add a public test-framework surface early. | Resolve after the first Podbot integration test shows the smallest useful call site.     |
-| Should the simulator runner bind port zero itself rather than receiving a pre-selected port from Rust?                      | Binding in Rust and handing the port to Bun carries a small bind-release race.           | Resolve during process skeleton implementation if the race appears in local gates.       |
 | Should Simulacat Core add `GET /app` before or after the 3.3.1 proof?                                                       | Credential validation uses `GET /app`, but 3.3.1 only requires token acquisition.        | Defer unless Podbot cannot bypass startup credential validation in the integration test. |
 | How should token sequencing be represented for Podbot 3.3.2?                                                                | Refresh-loop tests need token A then token B, expiry control, and failure modes.         | Capture in a later design update after 3.3.1 lands.                                      |
 
@@ -181,6 +184,7 @@ prototype. Candidate future Architecture Decision Records (ADRs) are:
 
 ## References
 
+- [ADR 001: Use Simulacat Core for the Octocrab spike](adr-001-use-simulacat-core-for-octocrab-spike.md).
 - Podbot design:
   <https://github.com/leynos/podbot/blob/main/docs/podbot-design.md>.
 - Podbot roadmap:

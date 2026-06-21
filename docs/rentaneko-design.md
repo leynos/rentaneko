@@ -5,8 +5,9 @@
   maintainers.
 - **Scope:** Walking skeleton for the Podbot 3.3.1 token-writer spike.
 - **Companion documents:** [terms of reference](terms-of-reference.md),
-  [roadmap](roadmap.md), and [repository layout](repository-layout.md).
-- **Last updated:** 2026-06-18.
+  [ADR 001](adr-001-use-simulacat-core-for-octocrab-spike.md), [roadmap](roadmap.md),
+  and [repository layout](repository-layout.md).
+- **Last updated:** 2026-06-21.
 
 ## 1. Problem statement
 
@@ -48,7 +49,10 @@ atomic rename semantics.
 Simulacat establishes the process-fixture pattern. Its Python fixture starts a
 Bun entrypoint, waits for a machine-readable listening event, constructs a
 client bound to the simulator, and tears the process down even when the test
-fails.
+fails. The Python prior art already uses an operating-system-assigned port and
+a bounded terminate-then-kill cleanup path. Rentaneko should copy those proven
+parts, but it must add parent-death cleanup through runner stdin because the
+searched Simulacat fixture surfaces do not provide that orphan-process guard.
 
 Simulacat Core already exposes `simulation(args)` with `initialState` and
 `apiUrl` arguments. Its current capability matrix lists an installation-token
@@ -79,18 +83,41 @@ The prototype has three components:
 
 _Table 1: Prototype component boundaries._
 
-The Rust crate writes a JSON runner configuration into a temporary directory,
-spawns the Bun runner, reads newline-delimited standard output until it sees a
-`{"event":"listening","port":N}` event, and retains the child process until
+The Rust crate writes a versioned JSON runner configuration into a temporary
+directory, spawns the Bun runner, reads newline-delimited standard output until
+it sees a compatible readiness event, and retains the child process until
 fixture drop. The runner imports Simulacat Core, calls
-`simulation({ initialState })`, listens on the requested or selected local
-port, and closes on `SIGINT` or `SIGTERM`.
+`simulation({ initialState })`, binds `127.0.0.1:0`, reports the actual local
+port, and closes on `SIGINT`, `SIGTERM`, or parent-side stdin closure.
 
-The first implementation may pre-select an available localhost port in Rust and
-pass it to the runner. The more robust follow-up is to let the runner bind port
-zero and report the actual port, matching Simulacat's process contract.
+The implementation must bind port zero in the runner from the first slice.
+Pre-selecting a localhost port in Rust is rejected because it introduces a
+bind-release race that is easy to avoid at the only process boundary.
 
-## 5. Simulator state contract
+## 5. Fail-fast compatibility checkpoint
+
+Before implementing the managed Bun runner, Rentaneko must prove the
+load-bearing client assumption directly: `octocrab` 0.51.0 must be able to call
+Simulacat Core's existing installation-token route and parse
+`FAKE_GITHUB_TOKEN`.
+
+The checkpoint may use a hand-started or throwaway Simulacat Core process. It
+does not need the final Rust lifecycle handle. It must use a real
+App-authenticated `octocrab::Octocrab`, installation ID `2000`, and the current
+minimum simulator state from this document.
+
+The checkpoint answers two questions before process machinery is built:
+
+- whether Simulacat Core's token payload is compatible with
+  `installation_token_with_buffer`;
+- whether the route accepts the App-authenticated request under the simulator's
+  current permissive authentication policy.
+
+If either question fails, Rentaneko should stop the spike and create the
+smallest Simulacat Core compatibility task rather than compensating with a
+Rust-side response patch.
+
+## 6. Simulator state contract
 
 The minimum initial state is intentionally small:
 
@@ -121,7 +148,81 @@ The expected token endpoint response is the current Simulacat Core default:
 `FAKE_GITHUB_TOKEN` for a known installation and `404` for an unknown
 installation. Rentaneko should not patch the response in Rust.
 
-## 6. Rust API skeleton
+## 7. Runner configuration contract
+
+The Rust crate and Bun runner exchange one versioned JSON document. The v1
+configuration shape is:
+
+```json
+{
+  "version": 1,
+  "initialState": {
+    "users": [],
+    "installations": [
+      {
+        "id": 2000,
+        "account": "rentaneko",
+        "app_id": 1
+      }
+    ],
+    "organizations": [],
+    "repositories": [],
+    "branches": [],
+    "blobs": []
+  },
+  "bind": {
+    "host": "127.0.0.1",
+    "port": 0
+  }
+}
+```
+
+The contract rules are:
+
+- `version` is required and must be `1` for the prototype.
+- `initialState` is passed through to Simulacat Core as the authoritative
+  state object.
+- `bind.host` is required and must be `127.0.0.1` for the prototype.
+- `bind.port` is required and must be `0`; the runner owns port selection.
+- Unknown top-level fields are reserved for future versions and should be
+  ignored by the runner when they do not conflict with required fields.
+- Missing or invalid required fields must emit an `error` event and exit with a
+  non-zero status.
+
+## 8. Runner event contract
+
+Runner standard output is newline-delimited JSON (NDJSON), encoded as UTF-8.
+The Rust parser reads one line at a time until it observes a classified event
+or the startup timeout expires.
+
+The parser rules are:
+
+- every classified event is a JSON object with an integer `version` field and a
+  string `event` discriminant;
+- non-JSON lines, JSON values that are not objects, and objects with unknown
+  event names are unclassified noise;
+- unclassified lines are ignored for state transitions but retained for error
+  diagnostics;
+- additive fields on known events are permitted;
+- the parser must not require the readiness line to be the first line on
+  stdout.
+
+The v1 readiness event is:
+
+```json
+{"version":1,"event":"listening","host":"127.0.0.1","port":49152}
+```
+
+The v1 error event is:
+
+```json
+{"version":1,"event":"error","message":"Server failed to bind to a port"}
+```
+
+The `listening` event is valid only when `host` is `127.0.0.1` and `port` is a
+positive integer. The Rust handle constructs the base URI from those two fields.
+
+## 9. Rust API skeleton
 
 The first public surface should be constructor-shaped. Consumers can wrap it in
 `rstest` fixtures without forcing Rentaneko to stabilize a reusable fixture API
@@ -142,8 +243,15 @@ impl Simulator {
 ```
 
 The implementation should also own the child process and temporary directory,
-but those fields remain private. `Drop` should request shutdown and then wait;
-it may kill the child only when graceful shutdown does not complete.
+but those fields remain private. `Simulator::start` is the single lifecycle
+authority. Convenience types may compose `Simulator`, but they must not add a
+second process-start or teardown path.
+
+`Drop` is synchronous, so it must not depend on `.await`. It should close the
+parent-side stdin pipe, send graceful termination when the process is still
+running, wait for a bounded interval, then kill and wait for a shorter bounded
+interval if the child remains alive. The drop path is best effort and should
+not inspect or kill unrelated processes.
 
 An optional convenience wrapper can own the simulator and client together:
 
@@ -161,9 +269,13 @@ impl OctocrabFixture {
 ```
 
 This type is `rstest`-friendly without depending on `rstest` macros inside the
-library API.
+library API. For the 3.3.1 state, one simulator instance can be shared across
+multiple test cases because the seeded installation state is read-only. The
+recommended consumer fixture scope is therefore module or package scope when
+all cases use the same state, and function scope only when a later test mutates
+simulator state.
 
-## 7. Octocrab construction
+## 10. Octocrab construction
 
 Rentaneko should align its `octocrab` dependency with Podbot for the incubator
 phase. Returning an `octocrab::Octocrab` value across crate boundaries only
@@ -183,7 +295,7 @@ The design deliberately avoids `validate_app_credentials` for the first proof.
 That Podbot path calls `GET /app`; the token-writer task only needs the
 installation-token route.
 
-## 8. Podbot integration proof
+## 11. Podbot integration proof
 
 The integration test should make one narrow assertion chain:
 
@@ -199,7 +311,7 @@ Podbot should test atomicity separately with large old and new token values,
 concurrent readers, and the invariant that every read returns either the full
 old token or the full new token.
 
-## 9. Upstream Simulacat Core dependency
+## 12. Upstream Simulacat Core dependency
 
 No new Simulacat Core runtime feature is required if real `octocrab` can
 consume the existing installation-token response. The one recommended upstream
@@ -215,20 +327,43 @@ already asks whether generated REST payloads can be consumed by real GitHub
 client libraries. It should not depend on later permission and token scenario
 work in step 9.5.2.
 
-## 10. Failure modes
+Rentaneko still needs its own drift tripwire. A Rentaneko integration test must
+start the packaged runner, perform the real `octocrab` token request, and assert
+`FAKE_GITHUB_TOKEN`. That test fails loudly when Simulacat Core's
+`simulation()` API, token route, payload shape, or permissive authentication
+behaviour drifts underneath Rentaneko.
+
+## 13. Failure modes and errors
 
 | Failure                                       | Required behaviour                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Bun is missing                                | Return or skip with a clear diagnostic naming the missing executable.                      |
 | Runner exits before readiness                 | Include captured standard error and the config path in the error.                          |
-| Readiness line is malformed                   | Report the malformed line without hiding preceding output.                                 |
+| Readiness event is malformed                  | Report the malformed event without hiding preceding output.                                |
 | Simulator returns 404 for installation `2000` | Treat this as fixture setup failure, not as a Podbot token-writer failure.                 |
 | `octocrab` rejects the base URI               | Return a construction error that includes the URI value.                                   |
 | Child process survives graceful shutdown      | Kill only the owned child process and wait for it; do not inspect or kill other processes. |
+| Parent process exits normally                 | Runner observes stdin closure and self-terminates without requiring an external sweeper.   |
 
 _Table 2: Prototype failure handling._
 
-## 11. Verification strategy
+The semantic error enum should map these cases directly instead of collapsing
+them into one stringly failure. The initial `RentanekoError` variants should
+include:
+
+- `BunUnavailable`;
+- `ConfigWriteFailed`;
+- `RunnerSpawnFailed`;
+- `ReadinessTimeout`;
+- `RunnerExitedBeforeReady`;
+- `MalformedReadinessEvent`;
+- `RunnerErrorEvent`;
+- `BaseUriRejected`;
+- `OctocrabBuildFailed`;
+- `InstallationTokenUnavailable`;
+- `ShutdownFailed`.
+
+## 14. Verification strategy
 
 The design has two specific correctness properties:
 
@@ -243,7 +378,12 @@ The first property is verified by the Rentaneko-backed Podbot integration test.
 The second is verified by keeping the Podbot writer test independent from the
 simulator and by documenting the separation in this design.
 
-## 12. Deferred scope
+Rentaneko also needs a contract-boundary property: the Bun runner and Rust
+handle must agree on the v1 configuration and NDJSON readiness contracts. This
+is verified by parser tests for classified, unclassified, and malformed lines,
+plus a runner integration test that binds port zero and reports the actual port.
+
+## 15. Deferred scope
 
 - `GET /app` compatibility for Podbot credential validation.
 - Configurable token sequences and expiry payloads for refresh-loop tests.
@@ -255,6 +395,7 @@ simulator and by documenting the separation in this design.
 ## References
 
 - [Rentaneko terms of reference](terms-of-reference.md).
+- [ADR 001: Use Simulacat Core for the Octocrab spike](adr-001-use-simulacat-core-for-octocrab-spike.md).
 - Podbot design:
   <https://github.com/leynos/podbot/blob/main/docs/podbot-design.md>.
 - Podbot roadmap:

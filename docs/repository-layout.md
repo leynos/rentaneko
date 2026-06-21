@@ -20,6 +20,7 @@ compact and omits build output such as `target/`.
 │       ├── ci.yml
 
 ├── docs/
+│   ├── adr-001-use-simulacat-core-for-octocrab-spike.md
 │   ├── contents.md
 │   ├── developers-guide.md
 │   ├── rentaneko-design.md
@@ -56,6 +57,8 @@ compact and omits build output such as `target/`.
 
 - `docs/`: Holds long-lived reference documentation, guides, style rules, and
   design material.
+- `docs/adr-*.md`: Records accepted and proposed Architecture Decision Records
+  (ADRs) for substantive design choices.
 - `docs/contents.md`: Indexes the documentation set and should be updated when
   documentation files are added, renamed, or removed.
 - `docs/users-guide.md`: Explains how to use the generated project and its
