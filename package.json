@@ -1,0 +1,10 @@
+{
+  "packageManager": "bun@1.3.11",
+  "private": true,
+  "engines": {
+    "bun": ">=1.3.11"
+  },
+  "dependencies": {
+    "simulacat-core": "github:leynos/simulacat-core#79b51f314238d7d602b73fede7bd27b10f206b6e"
+  }
+}

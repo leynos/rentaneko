@@ -1,3 +1,4 @@
 target/
 **/*.rs.bk
 .memdb/
+node_modules/
