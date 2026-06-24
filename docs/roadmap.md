@@ -28,19 +28,23 @@ walking skeleton. Its outcome decides whether Rentaneko can proceed to process
 lifecycle work or must first request Simulacat Core compatibility changes. See
 rentaneko-design.md §5 and adr-001-use-simulacat-core-for-octocrab-spike.md.
 
-- [ ] 1.1.1. Add the minimal Octocrab-to-Simulacat compatibility checkpoint.
+- [x] 1.1.1. Add the minimal Octocrab-to-Simulacat compatibility checkpoint.
   - See rentaneko-design.md §5.
   - Use a hand-started or throwaway Simulacat Core process, the minimum
     installation state, App ID `1`, installation ID `2000`, and real
     `octocrab` 0.51.0 App authentication.
-  - Success: `installation_token_with_buffer` returns `FAKE_GITHUB_TOKEN`
-    without Rentaneko patching the response.
+  - Outcome: the checkpoint exists as an opt-in `rstest-bdd` test and the
+    default quality gates pass, but the happy path reaches the fail-fast
+    compatibility stop. `installation_token_with_buffer` treats Simulacat
+    Core's token payload as a GitHub error response and fails with
+    `Serde Error: missing field 'message'`; the unknown-installation scenario
+    errors as expected.
 - [ ] 1.1.2. Record the exact upstream outcome of the checkpoint.
   - Requires 1.1.1.
   - See rentaneko-design.md §12.
-  - If the checkpoint passes, document that no Simulacat Core runtime feature
-    is required for Podbot 3.3.1. If it fails, name the smallest Simulacat Core
-    route, payload, or authentication compatibility task before continuing.
+  - The 1.1.1 checkpoint failed at the Octocrab installation-token boundary.
+    Name the smallest Simulacat Core route, payload, or authentication
+    compatibility task before continuing.
   - Success: the docs state whether the spike is blocked by upstream
     compatibility and do not let Rentaneko compensate with a Rust-side token
     payload fork.
