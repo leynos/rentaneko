@@ -323,13 +323,14 @@ Stop and escalate when any threshold is breached:
   completed with zero findings after deterministic gates and the live
   compatibility stop were rechecked. Evidence:
   `/tmp/coderabbit-rentaneko-1-1-1-stage-c-followup-5.out`.
-- [ ] Stage D: refactor under the 70-line/complexity-9 limits, update
-  documentation (incl. the supersede-and-delete trigger), run all gates, and
-  record the 1.1.2 outcome.
+- [x] Stage D: update the roadmap and execplan for the current implementation
+  status. The broader 1.1.2 design/outcome record remains a separate roadmap
+  task because it must name the upstream compatibility change before Rentaneko
+  continues.
 - [x] Quality gates green: `make fmt`, `make check-fmt`, `make markdownlint`,
   `make lint`, `make test`.
 - [x] `coderabbit review --agent` concerns cleared.
-- [ ] Roadmap 1.1.1 marked done.
+- [x] Roadmap 1.1.1 marked done.
 
 ## Surprises & discoveries
 
@@ -462,9 +463,10 @@ Stop and escalate when any threshold is breached:
   `installations: [{id: 2000, account: "rentaneko", app_id: 1}]` is sufficient
   for the token. The upstream test pairs a matching
   `organizations: [{login: "rentaneko"}]` entry, which design §6 lists as
-  conditional — Stage A confirms whether the org row is required and Stage D
-  reconciles §6 with the finding. The checkpoint is expected to pass, so 1.1.2
-  should record "no upstream change required".
+  conditional — Stage A confirmed the seeded route itself is reachable. The
+  full checkpoint still failed at Octocrab's installation-token deserialization
+  boundary, so 1.1.2 must not record "no upstream change required"; it must
+  name the smallest upstream compatibility change.
 - Observation: CI does not run `make test`. `.github/workflows/ci.yml` runs
   `check-fmt`, `markdownlint`, `audit`, `lint`, then a `generate-coverage`
   action. `make lint` (`--all-targets --all-features`) is therefore the CI gate
@@ -550,12 +552,20 @@ Stop and escalate when any threshold is breached:
 
 ## Outcomes & retrospective
 
-To be completed at delivery. Compare against Purpose: did the checkpoint prove
-`octocrab` 0.51.0 reads `FAKE_GITHUB_TOKEN` unmodified through real JWT
-construction and deserialization, did the unknown-installation negative path
-fail as expected, and did the 1.1.2 record state the upstream outcome
-(including the named assumption that the route's `permissions` default keeps
-octocrab deserialization valid) without a Rust-side payload fork?
+The checkpoint was delivered and reviewed, but it disproved the hoped-for
+compatibility. The throwaway Bun runner can seed Simulacat Core with
+installation `2000`, the raw token route returns `201` with
+`FAKE_GITHUB_TOKEN`, and the unknown-installation scenario for `9999` produces
+an Octocrab error as expected. The required happy path does not pass:
+`installation_token_with_buffer` on a real installation-scoped `octocrab`
+client fails with `Serde Error: missing field 'message' at line 1 column 173`.
+
+The implementation therefore satisfies roadmap 1.1.1 as a fail-fast checkpoint,
+not as proof that Rentaneko can proceed unchanged. Roadmap 1.1.2 must now
+record the upstream outcome and name the smallest Simulacat Core, Octocrab, or
+compatibility-contract change required before later lifecycle and fixture work
+continues. Rentaneko did not fork or rewrite the token payload in Rust,
+preserving the plan's no-compensation constraint.
 
 ## Context and orientation
 
@@ -715,9 +725,12 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    `installation_token_with_buffer(chrono::Duration::seconds(60))`, expose the
    secret, and assert it equals `FAKE_GITHUB_TOKEN`; in the negative scenario,
    assert an unseeded id yields an `octocrab` error.
-6. Make the port-extractor unit test and both checkpoint scenarios pass.
+6. Make the port-extractor unit test pass and run the opt-in checkpoint to the
+   real compatibility boundary. The implemented checkpoint leaves the
+   installation `2000` happy path failing with the documented Octocrab
+   deserialization error and leaves 1.1.2 to name the upstream fix.
 
-### Stage D: refactor, document, record outcome
+### Stage D: document the checkpoint outcome
 
 1. Keep every function within the `clippy.toml` ceilings and the test file under
    400 lines; the harness already lives in `tests/checkpoint_support/mod.rs`,
@@ -730,12 +743,12 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    `docs/users-guide.md` (the new opt-in test command and the Bun
    prerequisite), and `.gitignore` (append `node_modules/`; commit the Bun
    lockfile).
-3. Record the checkpoint outcome for the 1.1.2 decision input: update
-   `docs/rentaneko-design.md` §12 (and §6 to reconcile the `organizations` seed
-   finding) stating whether any Simulacat Core runtime change is required
-   (expected: none), and naming the `permissions`-default assumption.
-4. Run all gates, then `coderabbit review --agent`, clear concerns, mark roadmap
-   1.1.1 done.
+3. Record the checkpoint outcome for the 1.1.2 decision input: roadmap 1.1.2
+   remains open and must state that the happy path failed at the
+   installation-token Octocrab boundary before any downstream lifecycle work
+   continues.
+4. Run all gates, then `coderabbit review --agent`, clear concerns, and mark
+   roadmap 1.1.1 done.
 
 ## Concrete steps
 
@@ -797,25 +810,26 @@ Red-Green-Refactor evidence to capture:
   (or before seeding),
   `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` fails
   with a `404`/deserialization error or an assertion mismatch — captured
-  verbatim. Green: with seeding and the real calls wired, the happy scenario
-  reports the token equals `FAKE_GITHUB_TOKEN` and the negative scenario
-  reports an `octocrab` error for an unseeded id; both pass. Refactor: rerun
-  after extraction/cleanup.
+  verbatim. Green was intentionally not forced after the real boundary failed:
+  the negative scenario passes, while the happy scenario fails with
+  `Serde Error: missing field 'message' at line 1 column 173`. This is the
+  roadmap 1.1.1 stop condition, so do not patch the token payload or bypass
+  `installation_token_with_buffer` in Rentaneko.
 
 Behaviour-driven specification (embedded; keep synchronized with the test):
 
 ```gherkin
 Feature: Octocrab consumes the Simulacat Core installation-token route
 
-  Scenario: Acquire an installation token from a throwaway Simulacat Core
+  Background:
     Given a throwaway Simulacat Core seeded with installation 2000 for app 1
     And an App-authenticated octocrab client pointed at the simulator
+
+  Scenario: Acquire an installation token from a throwaway Simulacat Core
     When the client requests an installation token for installation 2000
     Then the token equals "FAKE_GITHUB_TOKEN"
 
   Scenario: An unknown installation is rejected
-    Given a throwaway Simulacat Core seeded with installation 2000 for app 1
-    And an App-authenticated octocrab client pointed at the simulator
     When the client requests an installation token for installation 9999
     Then octocrab returns an error
 ```
@@ -823,14 +837,18 @@ Feature: Octocrab consumes the Simulacat Core installation-token route
 Quality criteria (what "done" means):
 
 - Tests: the port-extractor `rstest` cases pass (and are exercised by CI's
-  coverage action); both `#[ignore]`d checkpoint scenarios pass locally with
-  Bun present and are skipped (not failed) without Bun.
+  coverage action); both `#[ignore]`d checkpoint scenarios compile and are
+  skipped (not failed) by default; when run locally with Bun present, the
+  unknown-installation scenario passes and the installation `2000` happy path
+  fails with the documented Octocrab deserialization error.
 - Lint/typecheck: `make lint` passes with warnings denied (rustdoc, Clippy with
   the `clippy.toml` ceilings, Whitaker). No lint suppressions added.
 - Format: `make check-fmt` and `make markdownlint` pass; `make fmt` applied to
   Markdown changes.
-- Compatibility: the token is `FAKE_GITHUB_TOKEN`, never modified in Rust; the
-  unknown-installation path errors.
+- Compatibility: the token route still returns `FAKE_GITHUB_TOKEN` outside
+  Rentaneko's Rust path, the token is never modified in Rust, the
+  unknown-installation path errors, and the real Octocrab happy path failure is
+  recorded as the 1.1.2 input.
 
 Quality method: run the three gate commands above with `tee`, then
 `coderabbit review --agent` only after they are green, and clear all concerns
@@ -925,14 +943,16 @@ Add only a `[dev-dependencies]` table to `Cargo.toml`. Use caret requirements
 
 ```toml
 [dev-dependencies]
-octocrab = "0.51"                                              # lockfile must pin 0.51.0 (match Podbot)
+octocrab = "0.51.0"                                            # match Podbot's incubator line
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "io-util", "time"] }
 jsonwebtoken = "10"                                            # EncodingKey; not re-exported by octocrab
+nix = { version = "0.30", features = ["process", "signal"] }   # process-group cleanup in the throwaway harness
 chrono = "0.4"                                                 # installation_token_with_buffer takes chrono::Duration
 secrecy = "0.10"                                               # ExposeSecret to read the returned SecretString
 serde_json = "1"                                              # parse the readiness line
 rstest = "0.26"                                               # align with Podbot's rstest 0.26.1
 rstest-bdd = "0.5"                                            # behavioural scenarios; see local users guide
+rstest-bdd-macros = "0.5"                                     # procedural macros used by the checkpoint
 googletest = "0.13"                                           # expressive assertions
 pretty_assertions = "1"                                       # readable equality diffs
 # wiremock = "0.6"                                            # uncomment only for ADR-sanctioned triage (Stage A.4)
@@ -941,12 +961,12 @@ pretty_assertions = "1"                                       # readable equalit
 Test-only Rust items to create (no public crate API changes):
 
 - `tests/octocrab_compatibility_checkpoint.rs`:
-  - `fn parse_listening_port(line: &str) -> Option<u16>` — pure; unit-tested
-    with `#[rstest]` cases. Parses one JSON line, requires `event == "listening"`
-    and `host == "127.0.0.1"`, returns the port via `u16::try_from` (no
-    truncating casts); ignores `version` and any additive fields. Full v1 parsing
-    is roadmap 1.2.2.
-  - `mod checkpoint_support;` — the harness module below.
+  - `mod checkpoint_support;` — the harness module below, which owns the pure
+    `parse_listening_port(line: &str) -> Option<u16>` helper. The integration
+    test unit-tests that helper with `#[rstest]` cases. It parses one JSON
+    line, requires `event == "listening"` and `host == "127.0.0.1"`, returns
+    the port via `u16::try_from` (no truncating casts), and ignores `version`
+    plus any additive fields. Full v1 parsing is roadmap 1.2.2.
   - the `#[scenario]`-bound async tests driving both scenarios; each annotated
     `#[tokio::test(flavor = "current_thread")]` and
     `#[ignore = "requires Bun and Simulacat Core; run with --run-ignored"]`.
@@ -1013,10 +1033,11 @@ child-process lifecycle), `leta` (navigation), `hexagonal-architecture`
 Initial draft (2026-06-21): authored from the roadmap, design, and ADR, with
 external API facts verified against `octocrab` 0.51.0 source and
 `simulacat-core` / `@simulacrum/foundation-simulator` 0.6.1 source. The
-load-bearing question — whether installation `2000` can be seeded so
-`installation_token_with_buffer` returns `FAKE_GITHUB_TOKEN` — is confirmed
-answerable "yes" by a bundled Simulacat Core test, so the checkpoint is
-expected to pass and 1.1.2 to record "no upstream change required".
+load-bearing question — whether installation `2000` can be seeded so the route
+returns `FAKE_GITHUB_TOKEN` — was confirmed answerable "yes" by a bundled
+Simulacat Core test. Implementation later proved the narrower route result does
+not imply full Octocrab compatibility: `installation_token_with_buffer` still
+fails to deserialize the token payload.
 
 Revision 2 (2026-06-21): incorporated a Logisphere design-review panel
 (Pandalump, Telefono, Doggylump, Buzzy Bee, Wafflecat, Dinolump). Changes: emit
