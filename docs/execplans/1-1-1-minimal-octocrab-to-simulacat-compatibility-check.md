@@ -202,7 +202,11 @@ Stop and escalate when any threshold is breached:
 
 - [ ] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
-- [ ] Stage A: resolve `simulacat-core` Bun dependency (SHA-pinned if git),
+- [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
+  GitHub at SHA `79b51f314238d7d602b73fede7bd27b10f206b6e`; a fresh
+  `bun install` plus the throwaway source-import runner served installation
+  `2000` with `FAKE_GITHUB_TOKEN` and rejected installation `9999`.
+- [x] Stage A: resolve `simulacat-core` Bun dependency (SHA-pinned if git),
   decide the test-key strategy, and confirm a throwaway server serves the token
   route (go/no-go).
 - [ ] Stage B: add red tests — the `.feature` scenarios (happy and negative) and
@@ -229,6 +233,77 @@ Stop and escalate when any threshold is breached:
   `Language server 'rust-analyzer' for rust failed to start`. Impact: use
   repository-local inspection for non-symbol material and retry `leta` after
   checking the installed toolchain before editing Rust helpers.
+- Observation: `bun add simulacat-core` against the public npm registry failed
+  with `GET https://registry.npmjs.org/simulacat-core - 404`, so the plan's git
+  fallback was required. Evidence:
+  `/tmp/bun-add-rentaneko-1-1-1-minimal-octocrab-to-simulacat-compatibility-check.out`.
+  Impact: `package.json` pins
+  `github:leynos/simulacat-core#79b51f314238d7d602b73fede7bd27b10f206b6e`.
+- Observation: the SHA-pinned package installs with `simulacat-core` 0.6.4 and
+  `@simulacrum/foundation-simulator` 0.6.1. A fresh root `bun install` installs
+  143 packages in roughly 83 ms on this machine and leaves `node_modules/` at
+  66 MiB. Evidence: `bun pm ls`, `bun.lock`, and
+  `/tmp/bun-install-fresh-after-coderabbit-rentaneko-1-1-1.out`. Impact: the
+  committed lockfile is sufficient for the checkpoint runner's package import
+  when Bun is launched with `--conditions development`; no generated `dist/`
+  files under `node_modules/` are needed.
+- Observation: importing `simulacat-core` by package name from the git
+  dependency fails after a fresh install under Bun's default export conditions
+  because the package's `exports` point at absent `dist/` artefacts. Building
+  those artefacts requires package-local dev tooling and, under this Node
+  version, `tsdown --config-loader unrun`. Evidence: the first
+  `bun -e 'import { simulation } from "simulacat-core"'` failed with
+  `Cannot find package 'simulacat-core'`;
+  `bun run --cwd node_modules/simulacat-core build` failed with a
+  `tsdown.config.ts` loader error;
+  `bun run --conditions development tests/checkpoint_support/checkpoint_runner.ts`
+  resolved the package's documented development export to `src/index.ts` after
+  deleting and reinstalling `node_modules/`. Impact: the throwaway runner uses
+  a normal package import, and the Rust harness must launch Bun with
+  `--conditions development`.
+- Observation: the hand-started throwaway runner printed
+  `{"version":1,"event":"listening","host":"127.0.0.1","port":43423}` on a
+  fresh install; `POST /app/installations/2000/access_tokens` returned `201`
+  with `token:"FAKE_GITHUB_TOKEN"` and `permissions`, while installation `9999`
+  returned `404`. Evidence: `/tmp/stage-a-runner-fresh-rentaneko-1-1-1.out` and
+  the curl transcript from 2026-06-24. Impact: Stage A's go/no-go condition
+  passed; Stage B/C may proceed.
+- Observation: after the Stage A CodeRabbit review, the runner still printed a
+  valid readiness line and served the same `201`/`404` route outcomes after the
+  signal-handler, shutdown, port-validation, and error-diagnostic fixes.
+  Evidence: `/tmp/stage-a-runner-after-coderabbit-rentaneko-1-1-1.out`. Impact:
+  CodeRabbit's Stage A concerns were addressed without changing the simulator
+  compatibility result.
+- Observation: after the second Stage A CodeRabbit review, the runner used the
+  standard `simulacat-core` package import, declared the Bun engine constraint,
+  bounded `listen`, flattened port extraction, and still served installation
+  `2000` with `FAKE_GITHUB_TOKEN` and installation `9999` with `404`. Evidence:
+  `/tmp/stage-a-runner-package-import-rentaneko-1-1-1.out`. Impact: the
+  remaining Stage A CodeRabbit concerns were addressed.
+- Observation: after the final Stage A CodeRabbit lifecycle review, the runner
+  guarded shutdown against repeated signals, clears the startup timeout timer,
+  and still served installation `2000` with `FAKE_GITHUB_TOKEN` and installation
+  `9999` with `404`. Evidence:
+  `/tmp/stage-a-runner-final-lifecycle-rentaneko-1-1-1.out`. Impact: the Stage
+  A runner lifecycle concerns were addressed.
+- Observation: after the retry CodeRabbit review, shutdown waits are bounded to
+  3 seconds, signal handlers are registered only after `listen` returns a
+  handle, `packageManager` declares `bun@1.3.11`, and the runner still served
+  installation `2000` with `FAKE_GITHUB_TOKEN` and installation `9999` with
+  `404`. Evidence: `/tmp/stage-a-runner-shutdown-timeout-rentaneko-1-1-1.out`.
+  Impact: the remaining Stage A CodeRabbit concerns were addressed.
+- Observation: after the final metadata and validation review, `package.json`
+  is private, port validation rejects non-finite and out-of-range values, the
+  shutdown handle guard is explicit, and the runner still served installation
+  `2000` with `FAKE_GITHUB_TOKEN` and installation `9999` with `404`. Evidence:
+  `/tmp/stage-a-runner-private-port-guard-rentaneko-1-1-1.out`. Impact: the
+  final Stage A CodeRabbit concerns were addressed.
+- Observation: Simulacat Core or its transitive dependencies can emit a
+  `FORCE_COLOR`/`NO_COLOR` warning to stdout before the readiness JSON in this
+  environment. Evidence: the first hand run captured the warning as the first
+  stdout line, before the JSON readiness line. Impact: the Rust readiness loop
+  must ignore non-JSON stdout lines and keep scanning until it sees a valid
+  `listening` event, an `error` event, EOF, or timeout.
 - Observation: `simulacat-core` does ship a CLI (`bin/start.cjs`), but it calls
   `simulation()` with no `initialState` and binds a fixed port with
   human-readable output, so it cannot serve the seeded token route the
@@ -307,6 +382,26 @@ Stop and escalate when any threshold is breached:
   adopt that shared scope so the spawn-per-test pattern is not cargo-culted
   into the managed fixture and multiplied across CI wall-clock. Date/Author:
   2026-06-21, planning agent.
+- Decision: commit a clearly named test-only RSA PEM in Stage C rather than
+  generating a key at runtime. Rationale: runtime generation would require an
+  extra Rust dev-dependency outside the plan's tolerance list, while the PEM is
+  non-credential test material and can be documented in the repository layout.
+  Date/Author: 2026-06-24, implementation agent.
+- Decision: accept CodeRabbit's Stage A lifecycle hardening findings for the
+  throwaway runner. Rationale: installing signal handlers before `listen`,
+  catching `ensureClose` failures, validating the reported port, and emitting
+  stack diagnostics reduce checkpoint flakiness while staying within the
+  throwaway scope. Date/Author: 2026-06-24, implementation agent.
+- Decision: use `bun run --conditions development` when launching the throwaway
+  runner. Rationale: this keeps the runner on the standard `simulacat-core`
+  package import while selecting the package's source export, so the checkpoint
+  does not rely on generated `dist/` output from the git dependency.
+  Date/Author: 2026-06-24, implementation agent.
+- Decision: keep the throwaway runner's startup timeout and signal cleanup
+  explicit even though the Rust harness also has its own timeout and drop
+  guard. Rationale: the TypeScript process should fail fast when run by hand or
+  by the Rust harness, and duplicated timeout boundaries are acceptable at this
+  disposable process edge. Date/Author: 2026-06-24, implementation agent.
 
 ## Outcomes & retrospective
 
