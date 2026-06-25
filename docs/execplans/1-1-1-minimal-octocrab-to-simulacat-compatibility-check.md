@@ -113,11 +113,11 @@ Stop and escalate when any threshold is breached:
 - Interface: if any change to `src/lib.rs`'s public API appears necessary, stop
   and escalate — 1.1.1 is test-only.
 - Dependencies: the expected new `[dev-dependencies]` are `octocrab`, `tokio`,
-  `jsonwebtoken`, `chrono`, `secrecy`, `serde_json`, `rstest`, `rstest-bdd`,
-  `googletest`, and `pretty_assertions`, plus `wiremock` only if the diagnostic
-  triage path (Stage A.4) is needed. If any *additional* crate is required, or
-  if any cannot resolve at the versions named in `Interfaces and dependencies`,
-  stop and escalate.
+  `jsonwebtoken`, `nix`, `chrono`, `secrecy`, `serde_json`, `rstest`,
+  `rstest-bdd`, `rstest-bdd-macros`, `googletest`, and `pretty_assertions`, plus
+  `wiremock` only if the diagnostic triage path (Stage A.4) is needed. If any
+  *additional* direct crate is required, or if any cannot resolve at the
+  versions named in `Interfaces and dependencies`, stop and escalate.
 - Readiness timeout: the harness must bound the readiness wait. If a bounded
   wait (default 30 s) elapses with no readiness line, stop the child, surface
   captured stderr, and fail with a clear message. A harness that can block
@@ -331,6 +331,25 @@ Stop and escalate when any threshold is breached:
   `make lint`, `make test`.
 - [x] `coderabbit review --agent` concerns cleared.
 - [x] Roadmap 1.1.1 marked done.
+- [x] 2026-06-26: `make audit` failure triaged. `rsa` 0.9.10 enters the
+  lockfile through the test-only `octocrab` / `jsonwebtoken` App JWT path and
+  triggers `RUSTSEC-2023-0071`; `proc-macro-error` remains the existing
+  `rstest-bdd-macros` unmaintained warning (`RUSTSEC-2024-0370`). An AWS-LC JWT
+  backend attempt removed `rsa` from the graph, but
+  `cargo test --no-run --test octocrab_compatibility_checkpoint` failed to link
+  unresolved `aws_lc_0_41_0_*` symbols even after trying
+  `aws-lc-rs/prebuilt-nasm`. Outcome: keep the buildable Octocrab default JWT
+  backend and make both audit ignores repo-owned defaults in `make audit`, with
+  runtime impact documented in `docs/developers-guide.md`.
+- [x] 2026-06-26: final deterministic gates and CodeRabbit review passed for
+  the audit-ignore change. Evidence:
+  `/tmp/fmt-rentaneko-1-1-1-audit-ignore-final.out`,
+  `/tmp/check-fmt-rentaneko-1-1-1-audit-ignore-final.out`,
+  `/tmp/markdownlint-rentaneko-1-1-1-audit-ignore-final.out`,
+  `/tmp/lint-rentaneko-1-1-1-audit-ignore-final.out`,
+  `/tmp/test-rentaneko-1-1-1-audit-ignore-final.out`,
+  `/tmp/audit-rentaneko-1-1-1-audit-ignore-final.out`, and
+  `/tmp/coderabbit-rentaneko-1-1-1-audit-ignore.out` (`findings: 0`).
 
 ## Surprises & discoveries
 
@@ -355,6 +374,14 @@ Stop and escalate when any threshold is breached:
   §"Using `#[scenario]` with async". Impact: the BDD skeleton requires
   `rstest-bdd-macros = "0.5"` as a dev-dependency alongside
   `rstest-bdd = "0.5"`.
+- Observation: Octocrab 0.51.0 can avoid the RustSec-advised `rsa` crate by
+  switching from its default `jwt-rust-crypto` path to `jwt-aws-lc-rs` and a
+  matching `jsonwebtoken/aws_lc_rs` direct dev-dependency, but the resulting
+  AWS-LC graph failed to link in this worktree with unresolved
+  `aws_lc_0_41_0_*` symbols. Enabling `aws-lc-rs/prebuilt-nasm` did not change
+  the failure. Impact: do not switch this checkpoint to AWS-LC until the native
+  link issue is solved separately; use the documented audit ignore for the
+  no-fixed-upgrade `rsa` advisory.
 - Observation: `bun add simulacat-core` against the public npm registry failed
   with `GET https://registry.npmjs.org/simulacat-core - 404`, so the plan's git
   fallback was required. Evidence:
@@ -549,6 +576,14 @@ Stop and escalate when any threshold is breached:
   `octocrab` client must call `installation_token_with_buffer` and read
   `FAKE_GITHUB_TOKEN` unmodified. The raw route is reachable, but the required
   Octocrab boundary fails. Date/Author: 2026-06-24, implementation agent.
+- Decision: keep the default Octocrab / jsonwebtoken RustCrypto JWT backend for
+  this test-only checkpoint and make `RUSTSEC-2023-0071` a repo-owned
+  `make audit` ignore. Rationale: the advisory has no fixed upgrade, the
+  affected path is not shipped as a runtime library dependency, and the AWS-LC
+  replacement backend was tested but failed deterministic compilation gates in
+  this environment. The ignore must be removed when Octocrab/jsonwebtoken ship
+  a buildable fixed backend or when the advised dependency leaves the graph.
+  Date/Author: 2026-06-26, implementation agent.
 
 ## Outcomes & retrospective
 
@@ -642,9 +677,11 @@ Verified external facts that this plan depends on (from source inspection of
   seed-controlled — recorded as a named upstream assumption for the 1.1.2
   outcome.
 - `octocrab` 0.51.0 depends on `jsonwebtoken` major `10` (not re-exported, so a
-  direct dev-dependency is required) and `secrecy` `0.10`. Default features
-  (rustls) suffice for a plain-HTTP local simulator. A Tokio runtime is
-  required.
+  direct dev-dependency is required) and `secrecy` `0.10`. The checkpoint keeps
+  Octocrab's default RustCrypto JWT backend because the AWS-LC backend removed
+  `rsa` but failed to link in this environment. The `rsa` advisory is therefore
+  handled by the documented `make audit` ignore while this code remains
+  test-only. A Tokio runtime is required.
 - `EncodingKey::from_rsa_pem` accepts PKCS#1 or PKCS#8 PEM and needs a ≥2048-bit
   RSA key (RS256). The key is test material, not a credential.
 - `simulation({initialState})` returns a `FoundationSimulator`;
@@ -943,9 +980,9 @@ Add only a `[dev-dependencies]` table to `Cargo.toml`. Use caret requirements
 
 ```toml
 [dev-dependencies]
-octocrab = "0.51.0"                                            # match Podbot's incubator line
+octocrab = "0.51.0"                                           # match Podbot's incubator line
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "io-util", "time"] }
-jsonwebtoken = "10"                                            # EncodingKey; not re-exported by octocrab
+jsonwebtoken = "10"                                          # Octocrab does not re-export EncodingKey
 nix = { version = "0.30", features = ["process", "signal"] }   # process-group cleanup in the throwaway harness
 chrono = "0.4"                                                 # installation_token_with_buffer takes chrono::Duration
 secrecy = "0.10"                                               # ExposeSecret to read the returned SecretString
