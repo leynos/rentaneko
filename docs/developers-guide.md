@@ -72,8 +72,15 @@ full generated workflow locally on Linux.
 
 ### Security audit ignores
 
-Security audit jobs may set `CARGO_AUDIT_IGNORES` for narrowly scoped RustSec
-advisories that affect unused or tooling-only dependency paths. Keep each
-ignore tied to a documented runtime impact analysis, and remove it when the
-affected dependency leaves the graph or the project starts using the advised
-runtime path.
+`make audit` includes the repo-owned default ignores `RUSTSEC-2023-0071` and
+`RUSTSEC-2024-0370`. `RUSTSEC-2023-0071` currently comes from `rsa` through the
+test-only `octocrab` / `jsonwebtoken` App JWT path; the advisory has no fixed
+upgrade and the AWS-LC JWT backend was evaluated but did not link in this
+environment. `RUSTSEC-2024-0370` comes from `proc-macro-error` through the
+`rstest-bdd-macros` test harness.
+
+Security audit jobs may add `CARGO_AUDIT_IGNORES` for further narrowly scoped
+RustSec advisories that affect unused or tooling-only dependency paths. Keep
+each ignore tied to a documented runtime impact analysis, and remove it when
+the affected dependency leaves the graph or the project starts using the
+advised runtime path.

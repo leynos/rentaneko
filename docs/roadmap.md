@@ -39,6 +39,11 @@ rentaneko-design.md §5 and adr-001-use-simulacat-core-for-octocrab-spike.md.
     Core's token payload as a GitHub error response and fails with
     `Serde Error: missing field 'message'`; the unknown-installation scenario
     errors as expected.
+  - Audit status: `make audit` includes documented repo-owned ignores for the
+    test-only `rsa` / `jsonwebtoken` advisory (`RUSTSEC-2023-0071`) and the
+    existing `rstest-bdd-macros` `proc-macro-error` warning
+    (`RUSTSEC-2024-0370`). The AWS-LC JWT backend was evaluated for 1.1.1 but
+    failed deterministic compile gates in this environment.
 - [ ] 1.1.2. Record the exact upstream outcome of the checkpoint.
   - Requires 1.1.1.
   - See rentaneko-design.md §12.

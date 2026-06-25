@@ -6,6 +6,7 @@ SHELL := bash
 TARGET ?= librentaneko.rlib
 
 CARGO ?= cargo
+CARGO_AUDIT_DEFAULT_IGNORES ?= RUSTSEC-2023-0071 RUSTSEC-2024-0370
 BUILD_JOBS ?=
 RUST_FLAGS ?=
 RUST_FLAGS := -D warnings $(RUST_FLAGS)
@@ -107,7 +108,7 @@ rust-audit: ## Audit the Rust workspace for known vulnerabilities
 	$(CARGO) metadata --no-deps --format-version 1 | python3 -c 'import json, sys; metadata = json.load(sys.stdin); members = set(metadata["workspace_members"]); print(metadata["workspace_root"]); [print(package["manifest_path"]) for package in metadata["packages"] if package["id"] in members]' > "$$manifest_list"; \
 	workspace_root=$$(sed -n '1p' "$$manifest_list"); \
 	audit_flags=(); \
-	for advisory in $$CARGO_AUDIT_IGNORES; do \
+	for advisory in $(CARGO_AUDIT_DEFAULT_IGNORES) $$CARGO_AUDIT_IGNORES; do \
 		audit_flags+=(--ignore "$$advisory"); \
 	done; \
 	printf "Auditing Rust workspace %s\n" "$$workspace_root"; \
