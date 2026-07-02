@@ -43,11 +43,17 @@ jobs:
         env:
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm cargo-nextest
+      # Dependency audits report advisories against the whole lockfile, so a
+      # newly published advisory would fail every Dependabot PR regardless of
+      # content and deadlock auto-merge. The scheduled audit workflow covers
+      # Dependabot merges instead.
       - name: Install cargo-audit
+        if: github.actor != 'dependabot[bot]'
         env:
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm cargo-audit
       - name: Setup Python for audit manifest extraction
+        if: github.actor != 'dependabot[bot]'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: '3.x'
@@ -77,6 +83,7 @@ jobs:
           whitaker-installer --cranelift
           echo "Whitaker binary: $(command -v whitaker || true)"
       - name: Audit dependencies
+        if: github.actor != 'dependabot[bot]'
         run: make audit
       - name: Lint
         run: make lint
