@@ -74,7 +74,10 @@ jobs:
           else
             cargo binstall --no-confirm whitaker-installer@${{ env.WHITAKER_INSTALLER_VERSION }}
           fi
-          whitaker-installer
+          # --cranelift provisions rustc-codegen-cranelift on Whitaker's pinned
+          # toolchain; this project builds with the Cranelift debug backend.
+
+          whitaker-installer --cranelift
       - name: Audit dependencies
         if: github.actor != 'dependabot[bot]'
         run: make audit
