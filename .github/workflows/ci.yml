@@ -13,7 +13,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       BUILD_PROFILE: debug
-      WHITAKER_INSTALLER_REV: f768c2e53c47df13658af1168a67851d388750bf
+      WHITAKER_INSTALLER_VERSION: '0.2.5'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -57,31 +57,27 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: '3.x'
-      - name: Cache Whitaker installation
-        id: cache-whitaker
+      - name: Cache Whitaker installer
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.cargo/bin/whitaker-installer
-            ~/.local/bin/whitaker
-            ~/.dylint_drivers
-            ~/.local/share/whitaker
-          key: whitaker-v2-${{ runner.os }}-${{ env.WHITAKER_INSTALLER_REV }}
+            ~/.cache/cargo-binstall
+          key: whitaker-installer-${{ runner.os }}-${{ runner.arch }}-${{ env.WHITAKER_INSTALLER_VERSION }}
       - name: Install Whitaker
         env:
           RUSTFLAGS: ""
         run: |
           set -euo pipefail
-          echo "Whitaker cache hit: ${{ steps.cache-whitaker.outputs.cache-hit }}"
-          if [ "${{ steps.cache-whitaker.outputs.cache-hit }}" != "true" ]; then
-            echo "Installing Whitaker installer at ${WHITAKER_INSTALLER_REV}"
-            cargo install --locked \
-              --git https://github.com/leynos/whitaker \
-              --rev "${WHITAKER_INSTALLER_REV}" \
-              whitaker-installer
+          if command -v whitaker-installer >/dev/null 2>&1; then
+            echo "whitaker-installer already present; skipping cargo binstall"
+          else
+            cargo binstall --no-confirm --locked "whitaker-installer@${WHITAKER_INSTALLER_VERSION}"
           fi
+          # --cranelift provisions rustc-codegen-cranelift on Whitaker's pinned
+          # toolchain; this project builds with the Cranelift debug backend.
+
           whitaker-installer --cranelift
-          echo "Whitaker binary: $(command -v whitaker || true)"
       - name: Audit dependencies
         if: github.actor != 'dependabot[bot]'
         run: make audit
