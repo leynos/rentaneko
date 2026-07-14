@@ -230,7 +230,7 @@ rentaneko-design.md §15.
   - See rentaneko-design.md §15 and
     <https://github.com/leynos/simulacat-core/blob/main/docs/roadmap.md#13-centralize-writes-and-reusable-fixture-construction>.
   - Success: consumers can seed an installation, repository, and branch without
-    hand-writing raw state.
+    writing raw state by hand.
 - [ ] 3.3.2. Evaluate a Git server or Git smart HTTP fixture separately from
   Rentaneko's API simulator role.
   - Requires 3.3.1.
