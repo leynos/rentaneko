@@ -1,0 +1,21 @@
+# Repository-specific identifiers, quotations and deliberate fixtures.
+
+schema = 1
+
+[oxford]
+stems = []
+
+[words]
+accepted = []
+
+[words.corrections]
+
+[patterns]
+# Official names: Azure Architecture Center and GitHub Flavored Markdown.
+ignore = [
+    "Azure Architecture\\s+Center\\s+\\|\\s+Microsoft Learn",
+    "GitHub\\s+Flavored\\s+Markdown",
+]
+
+[files]
+exclude = []

@@ -1,3 +1,8 @@
 target/
 **/*.rs.bk
 .memdb/
+__pycache__/
+.uv-cache/
+.uv-tools/
+.typos-oxendict-base.json
+.typos-oxendict-base.toml

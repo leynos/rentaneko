@@ -39,6 +39,10 @@ jobs:
             !**/dist/**
       - name: Setup uv
         uses: astral-sh/setup-uv@ca5ddd015e07666cb1f1340ad6171f5e7afffb3e
+        with:
+          python-version: '3.14'
+      - name: Spelling
+        run: make spelling
       - name: Install test runner
         env:
           RUSTFLAGS: ""
