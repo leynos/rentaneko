@@ -350,6 +350,15 @@ Stop and escalate when any threshold is breached:
   `/tmp/test-rentaneko-1-1-1-audit-ignore-final.out`,
   `/tmp/audit-rentaneko-1-1-1-audit-ignore-final.out`, and
   `/tmp/coderabbit-rentaneko-1-1-1-audit-ignore.out` (`findings: 0`).
+- [x] 2026-07-15: rebased this branch onto `origin/main`. The sole zdiff3
+  conflict was `.gitignore`; retained `main`'s Python and typos-tool exclusions
+  alongside this checkpoint's `node_modules/` exclusion because they serve
+  independent generated artefacts. Rebuilt `Cargo.lock` from the merged
+  manifests as required. `make check-fmt`, `make test`, and `make typecheck`
+  passed. The first `make lint` run hit a transient `clang` bus error while
+  building Whitaker's isolated Dylint cache; after removing only the incomplete
+  generated `target/dylint` cache, the clean `make lint` rebuild passed.
+  `coderabbit review --agent` completed with zero findings.
 
 ## Surprises & discoveries
 
@@ -907,7 +916,7 @@ before marking the task done.
   prior state. The supersede-and-delete clause governs removal when 1.3.1/1.3.2
   land.
 
-## Artifacts and notes
+## Artefacts and notes
 
 The throwaway Bun entrypoint (final form to verify against the resolved
 `foundation-simulator` version; note the v1 readiness shape and the error path):
