@@ -1,6 +1,7 @@
 target/
 **/*.rs.bk
 .memdb/
+.coverage
 __pycache__/
 .uv-cache/
 .uv-tools/
