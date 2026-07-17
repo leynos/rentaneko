@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETED
 
 ## Purpose / big picture
 
@@ -19,35 +19,37 @@ lifecycle machinery is built. See [rentaneko-design.md](../rentaneko-design.md)
 The single irreducible fact only real Rust can prove (beyond what a one-line
 `curl` already shows) is this: `octocrab` 0.51.0 constructs an RS256 JSON Web
 Token that Simulacat Core's permissive authentication *accepts*, and its
-`InstallationToken` deserializer *parses* the route's payload (which must carry
-both `token` and `permissions`). Everything else — the route exists, the value
-is `FAKE_GITHUB_TOKEN` — is observable with `curl`. The Rust harness exists to
+`InstallationToken` deserializer is the boundary where the compatibility
+question is decided. Everything else — the route exists, the value is
+`FAKE_GITHUB_TOKEN` — is observable with `curl`. The Rust harness exists to
 exercise that JWT-construction-plus-deserialization boundary, which is exactly
 the boundary Podbot depends on (ADR 001 decision drivers).
 
-After this change, a developer can run a single, opt-in checkpoint test that:
+After this change, a developer can run the single, opt-in checkpoint test that:
 
 1. starts a throwaway Simulacat Core process seeded with installation `2000`
    for App `1`, bound to `127.0.0.1` on an operating-system-assigned port;
 2. builds a real App-authenticated `octocrab::Octocrab` whose base URI points at
    that process;
 3. calls `installation_token_with_buffer` for installation `2000`; and
-4. observes the returned secret string is exactly `FAKE_GITHUB_TOKEN`, while an
-   unseeded installation id yields an `octocrab` error (proving the seed match,
-   not merely the payload).
+4. observes the unseeded installation id yields an `octocrab` error, while the
+   seeded installation `2000` path stops at
+   `Serde Error: missing field 'message' at line 1 column 173`.
 
-The observable success is:
-`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` passes,
-and the same test fails (for a diagnosable reason) before the `octocrab` call
-is wired. The deliverable is deliberately a *throwaway* harness, not the managed
+The observable result is:
+`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` reaches
+the documented deserialization failure on installation `2000`, while the same
+test still fails (for a diagnosable reason) before the `octocrab` call is
+wired. The deliverable is deliberately a *throwaway* harness, not the managed
 `Simulator` handle; that handle is later roadmap work (1.3.2), and the
 throwaway artefacts carry an explicit supersede-and-delete clause (see
 Constraints).
 
 This plan also closes out the decision input for task 1.1.2 (record the
-upstream outcome): if the checkpoint passes, no Simulacat Core runtime change
-is needed for Podbot 3.3.1; if it fails, the plan names the smallest upstream
-compatibility task rather than letting Rentaneko fork the token payload in Rust.
+upstream outcome): the checkpoint showed that the installation-token path fails
+at the `InstallationToken` deserialization boundary, so the next task must name
+the smallest upstream compatibility change rather than assuming no Simulacat
+Core runtime change is needed for Podbot 3.3.1.
 
 ## Constraints
 
@@ -359,6 +361,18 @@ Stop and escalate when any threshold is breached:
   building Whitaker's isolated Dylint cache; after removing only the incomplete
   generated `target/dylint` cache, the clean `make lint` rebuild passed.
   `coderabbit review --agent` completed with zero findings.
+- [x] 2026-07-17: review follow-up applied the concrete unknown-installation
+  HTTP assertion, bounded stderr capture, early runner signals, and production-
+  path audit preflight. Skipped the static fake test PEM, the guard graceful
+  ladder (roadmap 1.3.2), and the exact BDD fixture parameter drop requirement.
+- [x] 2026-07-17: review follow-up is green. `make check-fmt`,
+  `make markdownlint`, `make typecheck`, `make lint`, `make test`, and
+  `make audit` all passed; `coderabbit review --agent` reported zero findings.
+  Evidence: current `/tmp/check-fmt-...review-followup.out`,
+  `/tmp/markdownlint-...review-followup.out`,
+  `/tmp/typecheck-...review-followup.out`, `/tmp/lint-...review-followup.out`,
+  `/tmp/test-...review-followup.out`, `/tmp/audit-...review-followup.out`, and
+  `/tmp/coderabbit-...review-followup.out` (`findings: 0`).
 
 ## Surprises & discoveries
 
@@ -593,6 +607,13 @@ Stop and escalate when any threshold is breached:
   this environment. The ignore must be removed when Octocrab/jsonwebtoken ship
   a buildable fixed backend or when the advised dependency leaves the graph.
   Date/Author: 2026-06-26, implementation agent.
+- Decision: accept the review follow-up fixes for the concrete
+  unknown-installation HTTP assertion, bounded stderr capture, early runner
+  signals, and production-path audit preflight. Rationale: these tighten the
+  checkpoint without widening scope, while the static fake test PEM, the guard
+  graceful ladder, and the exact BDD fixture parameter drop remain governed by
+  test-material, roadmap 1.3.2, and the generated fixture binding. Date/Author:
+  2026-07-17, implementation agent.
 
 ## Outcomes & retrospective
 

@@ -22,7 +22,7 @@ const TEST_KEY_PEM: &[u8] = include_bytes!("checkpoint_support/checkpoint_test_o
 struct CheckpointState {
     server: Option<checkpoint_support::ThrowawayServerGuard>,
     client: Option<Octocrab>,
-    token_result: Option<Result<String, BoxError>>,
+    token_result: Option<Result<String, octocrab::Error>>,
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -114,15 +114,26 @@ fn token_equals(
     Ok(())
 }
 
-#[then("octocrab returns an error")]
-fn octocrab_returns_error(checkpoint_state: &CheckpointState) -> Result<(), BoxError> {
+#[then("octocrab reports that installation 9999 is unknown")]
+fn octocrab_reports_unknown_installation(
+    checkpoint_state: &CheckpointState,
+) -> Result<(), BoxError> {
     let Some(token_result) = checkpoint_state.token_result.as_ref() else {
         return Err(boxed_error("installation token was not requested"));
     };
-    assert!(
-        token_result.is_err(),
-        "unknown installation unexpectedly returned a token"
-    );
+
+    let Err(error) = token_result else {
+        return Err(boxed_error(
+            "unknown installation unexpectedly returned a token",
+        ));
+    };
+    let octocrab::Error::GitHub { source, .. } = error else {
+        return Err(boxed_error(format!(
+            "unknown installation returned an unexpected Octocrab error: {error}"
+        )));
+    };
+    assert_eq!(source.status_code.as_u16(), 404);
+    assert_eq!(source.message, "Not Found");
     Ok(())
 }
 
@@ -170,8 +181,7 @@ async fn request_installation_token(
             .await?;
         Ok::<String, octocrab::Error>(token.expose_secret().to_owned())
     }
-    .await
-    .map_err(|error| Box::new(error) as BoxError);
+    .await;
     checkpoint_state.token_result = Some(token_result);
     Ok(())
 }

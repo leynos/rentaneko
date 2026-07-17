@@ -9,7 +9,7 @@ use std::{
 
 use serde_json::Value;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, BufReader},
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader},
     process::{Child, Command},
     task::JoinHandle,
     time::timeout,
@@ -17,6 +17,8 @@ use tokio::{
 
 const RUNNER_PATH: &str = "tests/checkpoint_support/checkpoint_runner.ts";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_CAPTURED_STDERR_BYTES: usize = 16 * 1024;
+const STDERR_TRUNCATION_MARKER: &str = "<earlier stderr output truncated>\n";
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -55,7 +57,7 @@ pub async fn start_throwaway_server() -> Result<ThrowawayServerGuard, BoxError> 
     let mut child = spawn_runner()?;
     let stdout = child_stdout(&mut child)?;
     let stderr = child_stderr(&mut child)?;
-    let captured_stderr = Arc::new(Mutex::new(String::new()));
+    let captured_stderr = Arc::new(Mutex::new(StderrCapture::default()));
     let stderr_task = tokio::spawn(capture_stderr(stderr, Arc::clone(&captured_stderr)));
     let mut guard = ThrowawayServerGuard {
         child,
@@ -103,7 +105,7 @@ fn child_stderr(child: &mut Child) -> Result<impl AsyncRead + Unpin + Send + 'st
 
 async fn wait_for_port(
     stdout: impl AsyncRead + Unpin,
-    captured_stderr: &Arc<Mutex<String>>,
+    captured_stderr: &Arc<Mutex<StderrCapture>>,
 ) -> Result<u16, BoxError> {
     match timeout(STARTUP_TIMEOUT, read_listening_port(stdout)).await {
         Ok(Ok(port)) => Ok(port),
@@ -149,10 +151,19 @@ fn listening_port(event: &str, host: &str, port: u64) -> Option<u16> {
     }
 }
 
-async fn capture_stderr(stderr: impl AsyncRead + Unpin, captured_stderr: Arc<Mutex<String>>) {
-    let mut lines = BufReader::new(stderr).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        append_stderr(&captured_stderr, &line);
+async fn capture_stderr(
+    mut stderr: impl AsyncRead + Unpin,
+    captured_stderr: Arc<Mutex<StderrCapture>>,
+) {
+    let mut buffer = [0_u8; 1024];
+    while let Ok(bytes_read) = stderr.read(&mut buffer).await {
+        if bytes_read == 0 {
+            break;
+        }
+        let Some(output) = buffer.get(..bytes_read) else {
+            break;
+        };
+        append_stderr(&captured_stderr, &String::from_utf8_lossy(output));
     }
 }
 
@@ -161,18 +172,56 @@ fn is_error_event(line: &str) -> bool {
         .is_ok_and(|value| value.get("event").and_then(Value::as_str) == Some("error"))
 }
 
-fn append_stderr(captured_stderr: &Arc<Mutex<String>>, line: &str) {
+fn append_stderr(captured_stderr: &Arc<Mutex<StderrCapture>>, output: &str) {
     if let Ok(mut stderr) = captured_stderr.lock() {
-        stderr.push_str(line);
-        stderr.push('\n');
+        stderr.append(output);
     }
 }
 
-fn stderr(captured_stderr: &Arc<Mutex<String>>) -> String {
+fn stderr(captured_stderr: &Arc<Mutex<StderrCapture>>) -> String {
     captured_stderr.lock().map_or_else(
         |_| String::from("<stderr unavailable>"),
-        |stderr| stderr.clone(),
+        |stderr| stderr.as_str(),
     )
+}
+
+#[derive(Default)]
+struct StderrCapture {
+    output: String,
+    was_truncated: bool,
+}
+
+impl StderrCapture {
+    fn append(&mut self, output: &str) {
+        self.output.push_str(output);
+        self.truncate_to_capacity();
+    }
+
+    fn as_str(&self) -> String {
+        if self.was_truncated {
+            format!("{STDERR_TRUNCATION_MARKER}{}", self.output)
+        } else {
+            self.output.clone()
+        }
+    }
+
+    fn truncate_to_capacity(&mut self) {
+        let bytes_to_remove = self.output.len().saturating_sub(MAX_CAPTURED_STDERR_BYTES);
+        if bytes_to_remove == 0 {
+            return;
+        }
+
+        let start = first_char_boundary_at_or_after(&self.output, bytes_to_remove);
+        self.output.drain(..start);
+        self.was_truncated = true;
+    }
+}
+
+const fn first_char_boundary_at_or_after(value: &str, mut index: usize) -> usize {
+    while !value.is_char_boundary(index) {
+        index += 1;
+    }
+    index
 }
 
 #[cfg(unix)]
@@ -205,3 +254,22 @@ fn process_group_pid(process_group_id: u32) -> Option<Pid> {
 
 #[cfg(not(unix))]
 fn terminate_process_group(_child_id: Option<u32>) {}
+
+#[cfg(test)]
+mod tests {
+    //! Tests for bounded checkpoint diagnostics.
+
+    use super::{MAX_CAPTURED_STDERR_BYTES, STDERR_TRUNCATION_MARKER, StderrCapture};
+
+    #[test]
+    fn stderr_capture_retains_only_the_latest_output() {
+        let mut capture = StderrCapture::default();
+        capture.append(&"discarded".repeat(MAX_CAPTURED_STDERR_BYTES));
+        capture.append("retained");
+
+        let output = capture.as_str();
+        assert!(output.starts_with(STDERR_TRUNCATION_MARKER));
+        assert!(output.ends_with("retained"));
+        assert!(output.len() <= STDERR_TRUNCATION_MARKER.len() + MAX_CAPTURED_STDERR_BYTES);
+    }
+}

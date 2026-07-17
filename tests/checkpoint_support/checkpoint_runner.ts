@@ -17,14 +17,13 @@ try {
   const app = simulation({ initialState });
   let handle: Awaited<ReturnType<typeof app.listen>> | undefined;
   let isShuttingDown = false;
-  const shutdown = async () => {
-    if (isShuttingDown) {
+  let isClosing = false;
+
+  const closeHandle = async () => {
+    if (!handle || isClosing) {
       return;
     }
-    if (!handle) {
-      return;
-    }
-    isShuttingDown = true;
+    isClosing = true;
     try {
       await withTimeout(handle.ensureClose(), SHUTDOWN_TIMEOUT_MS, "checkpoint shutdown");
     } catch (error) {
@@ -33,13 +32,25 @@ try {
     process.exit(0);
   };
 
+  const shutdown = async () => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+    await closeHandle();
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
   handle = await withTimeout(
     app.listen(0, "127.0.0.1"),
     LISTEN_TIMEOUT_MS,
     "Simulacat Core listen",
   );
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  if (isShuttingDown) {
+    await closeHandle();
+  }
 
   const address = handle.server.address();
   const port = extractPort(address, handle.port);

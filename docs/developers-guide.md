@@ -79,6 +79,11 @@ upgrade and the AWS-LC JWT backend was evaluated but did not link in this
 environment. `RUSTSEC-2024-0370` comes from `proc-macro-error` through the
 `rstest-bdd-macros` test harness.
 
+The `make audit` preflight should reject those repo-owned ignores when a
+package is reachable through normal or build dependencies. That keeps the
+default ignores confined to test-only or tooling-only paths, rather than
+masking runtime code that ships in the normal dependency graph.
+
 Security audit jobs may add `CARGO_AUDIT_IGNORES` for further narrowly scoped
 RustSec advisories that affect unused or tooling-only dependency paths. Keep
 each ignore tied to a documented runtime impact analysis, and remove it when
