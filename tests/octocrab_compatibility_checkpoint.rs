@@ -5,6 +5,7 @@ mod checkpoint_support;
 use std::io;
 
 use chrono::Duration;
+use http::header::CONTENT_TYPE;
 use jsonwebtoken::EncodingKey;
 use octocrab::{
     Octocrab,
@@ -14,18 +15,28 @@ use pretty_assertions::assert_eq;
 use rstest::{fixture, rstest};
 use rstest_bdd_macros::{given, scenario, then, when};
 use secrecy::ExposeSecret;
+use uselesskey::{Factory, RsaFactoryExt, RsaSpec};
 
 const APP_ID: u64 = 1;
-const TEST_KEY_PEM: &[u8] = include_bytes!("checkpoint_support/checkpoint_test_only_key.pem");
 
 #[derive(Default)]
 struct CheckpointState {
     server: Option<checkpoint_support::ThrowawayServerGuard>,
     client: Option<Octocrab>,
+    requested_installation_id: Option<u64>,
     token_result: Option<Result<String, octocrab::Error>>,
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+impl CheckpointState {
+    async fn shutdown(self) -> Result<(), BoxError> {
+        if let Some(server) = self.server {
+            server.shutdown().await?;
+        }
+        Ok(())
+    }
+}
 
 #[fixture]
 fn checkpoint_state() -> CheckpointState {
@@ -34,6 +45,7 @@ fn checkpoint_state() -> CheckpointState {
     CheckpointState {
         server: None,
         client: None,
+        requested_installation_id: None,
         token_result: None,
     }
 }
@@ -118,6 +130,7 @@ fn token_equals(
 fn octocrab_reports_unknown_installation(
     checkpoint_state: &CheckpointState,
 ) -> Result<(), BoxError> {
+    assert_eq!(checkpoint_state.requested_installation_id, Some(9999));
     let Some(token_result) = checkpoint_state.token_result.as_ref() else {
         return Err(boxed_error("installation token was not requested"));
     };
@@ -146,9 +159,7 @@ fn octocrab_reports_unknown_installation(
 async fn octocrab_compatibility_acquires_token(
     checkpoint_state: CheckpointState,
 ) -> Result<(), BoxError> {
-    // `rstest-bdd` looks up fixtures by the parameter's exact name.
-    drop(checkpoint_state);
-    Ok(())
+    checkpoint_state.shutdown().await
 }
 
 #[scenario(
@@ -160,15 +171,14 @@ async fn octocrab_compatibility_acquires_token(
 async fn octocrab_compatibility_rejects_unknown_installation(
     checkpoint_state: CheckpointState,
 ) -> Result<(), BoxError> {
-    // `rstest-bdd` looks up fixtures by the parameter's exact name.
-    drop(checkpoint_state);
-    Ok(())
+    checkpoint_state.shutdown().await
 }
 
 async fn request_installation_token(
     checkpoint_state: &mut CheckpointState,
     installation_id: u64,
 ) -> Result<(), BoxError> {
+    checkpoint_state.requested_installation_id = Some(installation_id);
     let Some(client) = checkpoint_state.client.as_ref() else {
         return Err(boxed_error(
             "App-authenticated octocrab client was not configured",
@@ -187,11 +197,25 @@ async fn request_installation_token(
 }
 
 fn build_app_client(base_uri: &str) -> Result<Octocrab, BoxError> {
-    let key = EncodingKey::from_rsa_pem(TEST_KEY_PEM)?;
+    let key = runtime_signing_key()?;
     Ok(Octocrab::builder()
         .base_uri(base_uri)?
+        .add_header(CONTENT_TYPE, "application/json".to_owned())
         .app(AppId(APP_ID), key)
         .build()?)
+}
+
+fn runtime_signing_key() -> Result<EncodingKey, BoxError> {
+    let signing_key = Factory::random().rsa("octocrab-compatibility", RsaSpec::rs256());
+    Ok(EncodingKey::from_rsa_pem(
+        signing_key.private_key_pkcs8_pem().as_bytes(),
+    )?)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn runtime_generated_rsa_key_builds_app_client() -> Result<(), BoxError> {
+    build_app_client("http://127.0.0.1:65535")?;
+    Ok(())
 }
 
 fn boxed_error(message: impl Into<String>) -> BoxError {

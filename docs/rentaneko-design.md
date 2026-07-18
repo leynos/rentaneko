@@ -289,10 +289,11 @@ phase. Returning an `octocrab::Octocrab` value across crate boundaries only
 works cleanly when the consumer and fixture resolve the same major and minor
 crate version. Podbot currently uses `octocrab` 0.51.0.
 
-The fixture should include a static test RSA key. This key is test material,
-not a credential. The client factory should:
+The fixture should generate an RSA-2048+ RS256 test key at runtime with
+`uselesskey`. The key must remain in memory and must not be logged or persisted.
+The client factory should:
 
-- parse the embedded private key into `jsonwebtoken::EncodingKey`;
+- convert the runtime-only signing key into `jsonwebtoken::EncodingKey`;
 - call `Octocrab::builder().base_uri(simulator_base_uri)?.app(AppId(1), key)`;
 - build the client inside an active Tokio runtime;
 - return a semantic `RentanekoError` if key parsing, base URI configuration, or
@@ -312,30 +313,35 @@ The integration test should make one narrow assertion chain:
 4. Pass the returned token string to Podbot's token-file writer.
 5. Assert that the final token file contains `FAKE_GITHUB_TOKEN`.
 
+The completed 1.1.1 checkpoint reaches the token acquisition step with the
+existing Simulacat Core response. The App client must send
+`Content-Type: application/json`; otherwise Simulacat Core rejects the request
+before it evaluates the installation route.
+
 Podbot should test atomicity separately with large old and new token values,
 concurrent readers, and the invariant that every read returns either the full
 old token or the full new token.
 
 ## 12. Upstream Simulacat Core dependency
 
-No new Simulacat Core runtime feature is required if real `octocrab` can
-consume the existing installation-token response. The one recommended upstream
-item is a contract test:
+No Simulacat Core response compatibility change is required for real `octocrab`
+to consume the installation-token response. The recommended upstream item is a
+contract test:
 
 > Add an Octocrab installation-token contract test that starts Simulacat Core
 > with a deterministic installation, sends a real App-authenticated
-> `installation_token_with_buffer` request, and confirms the client receives
-> `FAKE_GITHUB_TOKEN`.
+> `installation_token_with_buffer` request with `Content-Type: application/json`
+> and confirms the client receives `FAKE_GITHUB_TOKEN`.
 
 This item belongs beside Simulacat Core roadmap step 1.4 because that step
 already asks whether generated REST payloads can be consumed by real GitHub
 client libraries. It should not depend on later permission and token scenario
 work in step 9.5.2.
 
-Rentaneko still needs its own drift tripwire. A Rentaneko integration test must
-start the packaged runner, perform the real `octocrab` token request, and assert
-`FAKE_GITHUB_TOKEN`. That test fails loudly when Simulacat Core's
-`simulation()` API, token route, payload shape, or permissive authentication
+Rentaneko still needs its own drift tripwire. The completed checkpoint starts
+the packaged runner, performs the real `octocrab` token request, and asserts
+`FAKE_GITHUB_TOKEN`. It fails loudly when Simulacat Core's `simulation()` API,
+token route, payload shape, request schema, or permissive authentication
 behaviour drifts underneath Rentaneko.
 
 ## 13. Failure modes and errors

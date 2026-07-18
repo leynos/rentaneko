@@ -26,8 +26,9 @@ documentation set.
 ## Execution plans
 
 - [Minimal Octocrab-to-Simulacat compatibility checkpoint (1.1.1)](execplans/1-1-1-minimal-octocrab-to-simulacat-compatibility-check.md)
-  is the execution plan for roadmap task 1.1.1, proving real `octocrab` can read
-  `FAKE_GITHUB_TOKEN` from a throwaway Simulacat Core process.
+  records the roadmap task 1.1.1 checkpoint, proving real `octocrab` receives
+  `FAKE_GITHUB_TOKEN` and a typed `404` response from a throwaway Simulacat
+  Core process.
 
 ## Rust reference material
 

@@ -15,6 +15,7 @@ categories = ["development-tools"]
 [dev-dependencies]
 chrono = "0.4"
 googletest = "0.13"
+http = "1.4"
 jsonwebtoken = "10"
 nix = { version = "0.30", features = ["process", "signal"] }
 octocrab = "0.51.0"
@@ -25,6 +26,7 @@ rstest-bdd-macros = "0.5"
 secrecy = "0.10"
 serde_json = "1"
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "time"] }
+uselesskey = { version = "0.10.0", features = ["rsa"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

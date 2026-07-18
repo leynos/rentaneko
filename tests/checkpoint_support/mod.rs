@@ -17,6 +17,7 @@ use tokio::{
 
 const RUNNER_PATH: &str = "tests/checkpoint_support/checkpoint_runner.ts";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_CAPTURED_STDERR_BYTES: usize = 16 * 1024;
 const STDERR_TRUNCATION_MARKER: &str = "<earlier stderr output truncated>\n";
 
@@ -27,7 +28,7 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// This is deliberately not the managed `Simulator` handle. Delete or fold it
 /// into the real runner when roadmap tasks 1.3.1 and 1.3.2 land.
 pub struct ThrowawayServerGuard {
-    child: Child,
+    child: Option<Child>,
     stderr_task: JoinHandle<()>,
     base_uri: String,
 }
@@ -36,12 +37,36 @@ impl ThrowawayServerGuard {
     /// Returns the simulator base URI used by `octocrab`.
     #[must_use]
     pub fn base_uri(&self) -> &str { &self.base_uri }
+
+    /// Gracefully stops the throwaway server and reaps its owned child process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the child cannot be reaped after the bounded
+    /// graceful shutdown and forced-termination fallback.
+    pub async fn shutdown(mut self) -> Result<(), BoxError> {
+        let Some(mut child) = self.child.take() else {
+            self.stderr_task.abort();
+            return Ok(());
+        };
+        terminate_process_group(child.id());
+        let graceful_shutdown = timeout(SHUTDOWN_TIMEOUT, child.wait()).await;
+        let result = match graceful_shutdown {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(error)) => force_kill_and_reap(&mut child, error).await,
+            Err(_) => force_kill_and_reap(&mut child, "graceful shutdown timed out").await,
+        };
+        self.stderr_task.abort();
+        result
+    }
 }
 
 impl Drop for ThrowawayServerGuard {
     fn drop(&mut self) {
-        terminate_process_group(self.child.id());
-        drop(self.child.start_kill());
+        if let Some(child) = self.child.as_mut() {
+            terminate_process_group(child.id());
+            drop(child.start_kill());
+        }
         self.stderr_task.abort();
     }
 }
@@ -60,7 +85,7 @@ pub async fn start_throwaway_server() -> Result<ThrowawayServerGuard, BoxError> 
     let captured_stderr = Arc::new(Mutex::new(StderrCapture::default()));
     let stderr_task = tokio::spawn(capture_stderr(stderr, Arc::clone(&captured_stderr)));
     let mut guard = ThrowawayServerGuard {
-        child,
+        child: Some(child),
         stderr_task,
         base_uri: String::new(),
     };
@@ -243,6 +268,19 @@ fn terminate_process_group(maybe_child_id: Option<u32>) {
             Ok(()) | Err(_) => {}
         }
     }
+}
+
+async fn force_kill_and_reap(
+    child: &mut Child,
+    graceful_shutdown_error: impl std::fmt::Display,
+) -> Result<(), BoxError> {
+    child.start_kill()?;
+    child.wait().await.map(|_| ()).map_err(|force_kill_error| {
+        Box::new(io::Error::other(format!(
+            "graceful shutdown failed: {graceful_shutdown_error}; force-kill reaping failed: \
+             {force_kill_error}"
+        ))) as BoxError
+    })
 }
 
 #[cfg(unix)]

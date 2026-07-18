@@ -18,11 +18,10 @@ lifecycle machinery is built. See [rentaneko-design.md](../rentaneko-design.md)
 
 The single irreducible fact only real Rust can prove (beyond what a one-line
 `curl` already shows) is this: `octocrab` 0.51.0 constructs an RS256 JSON Web
-Token that Simulacat Core's permissive authentication *accepts*, and its
-`InstallationToken` deserializer is the boundary where the compatibility
-question is decided. Everything else — the route exists, the value is
-`FAKE_GITHUB_TOKEN` — is observable with `curl`. The Rust harness exists to
-exercise that JWT-construction-plus-deserialization boundary, which is exactly
+Token that Simulacat Core's permissive authentication *accepts* and, with
+`Content-Type: application/json`, receives `FAKE_GITHUB_TOKEN` through the
+real `InstallationToken` path. The Rust harness also proves that installation
+`9999` reaches Octocrab's typed `404 Not Found` GitHub error. This is exactly
 the boundary Podbot depends on (ADR 001 decision drivers).
 
 After this change, a developer can run the single, opt-in checkpoint test that:
@@ -32,24 +31,22 @@ After this change, a developer can run the single, opt-in checkpoint test that:
 2. builds a real App-authenticated `octocrab::Octocrab` whose base URI points at
    that process;
 3. calls `installation_token_with_buffer` for installation `2000`; and
-4. observes the unseeded installation id yields an `octocrab` error, while the
-   seeded installation `2000` path stops at
-   `Serde Error: missing field 'message' at line 1 column 173`.
+4. observes a typed `404 Not Found` Octocrab error for the unseeded installation
+   `9999`, while the seeded installation `2000` returns `FAKE_GITHUB_TOKEN`.
 
 The observable result is:
-`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` reaches
-the documented deserialization failure on installation `2000`, while the same
-test still fails (for a diagnosable reason) before the `octocrab` call is
-wired. The deliverable is deliberately a *throwaway* harness, not the managed
+`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` passes
+both scenarios against the pinned simulator dependency. The deliverable is
+deliberately a *throwaway* harness, not the managed
 `Simulator` handle; that handle is later roadmap work (1.3.2), and the
 throwaway artefacts carry an explicit supersede-and-delete clause (see
 Constraints).
 
-This plan also closes out the decision input for task 1.1.2 (record the
-upstream outcome): the checkpoint showed that the installation-token path fails
-at the `InstallationToken` deserialization boundary, so the next task must name
-the smallest upstream compatibility change rather than assuming no Simulacat
-Core runtime change is needed for Podbot 3.3.1.
+This plan closes out task 1.1.2's upstream outcome: no Simulacat Core response
+change is required. The earlier deserialization symptom came from a `400`
+request-schema rejection caused by the missing JSON content-type header, not
+from the installation-token payload. The harness records that client
+configuration requirement without rewriting the simulator response.
 
 ## Constraints
 
@@ -191,18 +188,15 @@ Stop and escalate when any threshold is breached:
   medium. Mitigation: all `octocrab` construction and calls run inside the
   scenario's current-thread Tokio runtime
   (`#[tokio::test(flavor = "current_thread")]`).
-- Risk: a committed RSA private-key PEM, though test material, trips secret
-  scanners or the `coderabbit review --agent` gate. Severity: low. Likelihood:
-  medium. Mitigation: name the file to signal intent (e.g.
-  `checkpoint_test_only_key.pem`), document it as non-credential test material
-  in `repository-layout.md`, and resolve the scanner-allowlist question in
-  Stage A before committing. If allowlisting is awkward, generate the key at
-  test runtime instead (decided in Stage A; avoids committing a PEM at the cost
-  of an RSA-generation dev-dependency).
+- Risk: persisted or logged RSA private-key material, though test material,
+  trips secret scanners or the `coderabbit review --agent` gate. Severity: low.
+  Likelihood: medium. Mitigation: generate an RSA-2048+ RS256 key at runtime
+  with `uselesskey`, feed it directly into `jsonwebtoken::EncodingKey`, and
+  keep it out of stdout, stderr, and on-disk artefacts.
 
 ## Progress
 
-- [ ] 2026-06-24: implementation approved and started on branch
+- [x] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
 - [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
   GitHub at SHA `79b51f314238d7d602b73fede7bd27b10f206b6e`; a fresh
@@ -295,10 +289,10 @@ Stop and escalate when any threshold is breached:
   `/tmp/markdownlint-rentaneko-1-1-1-result-steps-nix-4.out`,
   `/tmp/lint-rentaneko-1-1-1-result-steps-nix-4.out`, and
   `/tmp/test-rentaneko-1-1-1-result-steps-nix-4.out`.
-- [x] 2026-06-24: the ignored live checkpoint still reaches the compatibility
-  stop after the Result/nix changes. Installation `9999` passes the expected
-  error scenario, and installation `2000` still fails with
-  `Serde Error: missing field 'message' at line 1 column 173`. Evidence:
+- [x] 2026-06-24: the ignored live checkpoint reached an apparent compatibility
+  stop after the Result/nix changes. This historical result was superseded on
+  2026-07-18: the missing JSON content-type header caused the schema `400`, not
+  an installation-token payload incompatibility. Evidence:
   `/tmp/test-live-stage-c-after-result-steps-nix-rentaneko-1-1-1.out`.
 - [x] 2026-06-24: Stage C fourth CodeRabbit findings addressed or adjudicated.
   The harness now documents `initialized` using the project spelling, spawn
@@ -316,19 +310,17 @@ Stop and escalate when any threshold is breached:
   `/tmp/markdownlint-rentaneko-1-1-1-coderabbit-followup-4-restore.out`,
   `/tmp/lint-rentaneko-1-1-1-coderabbit-followup-4-restore.out`, and
   `/tmp/test-rentaneko-1-1-1-coderabbit-followup-4-restore.out`.
-- [x] 2026-06-24: the ignored live checkpoint still reaches the compatibility
-  stop after the fourth CodeRabbit restore. Installation `9999` passes the
-  expected error scenario, and installation `2000` still fails with
-  `Serde Error: missing field 'message' at line 1 column 173`. Evidence:
+- [x] 2026-06-24: the ignored live checkpoint still showed the apparent
+  compatibility stop after the fourth CodeRabbit restore. The 2026-07-18 trace
+  supersedes this result with the missing content-type root cause. Evidence:
   `/tmp/test-live-stage-c-after-followup-4-restore-rentaneko-1-1-1.out`.
 - [x] 2026-06-24: Stage C CodeRabbit concerns cleared. The final review pass
   completed with zero findings after deterministic gates and the live
   compatibility stop were rechecked. Evidence:
   `/tmp/coderabbit-rentaneko-1-1-1-stage-c-followup-5.out`.
 - [x] Stage D: update the roadmap and execplan for the current implementation
-  status. The broader 1.1.2 design/outcome record remains a separate roadmap
-  task because it must name the upstream compatibility change before Rentaneko
-  continues.
+  status. Task 1.1.2 records that the existing upstream route is compatible
+  when the client supplies `Content-Type: application/json`.
 - [x] Quality gates green: `make fmt`, `make check-fmt`, `make markdownlint`,
   `make lint`, `make test`.
 - [x] `coderabbit review --agent` concerns cleared.
@@ -363,11 +355,19 @@ Stop and escalate when any threshold is breached:
   `coderabbit review --agent` completed with zero findings.
 - [x] 2026-07-17: review follow-up applied the concrete unknown-installation
   HTTP assertion, bounded stderr capture, early runner signals, and production-
-  path audit preflight. Skipped the static fake test PEM, the guard graceful
-  ladder (roadmap 1.3.2), and the exact BDD fixture parameter drop requirement.
+  path audit preflight.
 - [x] 2026-07-17: review follow-up is green. `make check-fmt`,
   `make markdownlint`, `make typecheck`, `make lint`, `make test`, and
   `make audit` all passed; `coderabbit review --agent` reported zero findings.
+- [x] 2026-07-18: removed the committed checkpoint key, generated the RSA-2048+
+  RS256 key at runtime with `uselesskey`, and changed both scenarios to await
+  explicit checkpoint shutdown. Added `Content-Type: application/json` to the
+  App client after a traced live request showed that Simulacat Core otherwise
+  rejects the request schema with `400`. The ignored checkpoint now passes for
+  both installation `2000` (`FAKE_GITHUB_TOKEN`) and `9999` (typed `404`). A
+  separate shutdown unit test would need to mock a real child, process group,
+  and reaping boundary; the ignored checkpoint covers that process behaviour,
+  while cancellation-interleaving coverage remains task 1.3.2.
   Evidence: current `/tmp/check-fmt-...review-followup.out`,
   `/tmp/markdownlint-...review-followup.out`,
   `/tmp/typecheck-...review-followup.out`, `/tmp/lint-...review-followup.out`,
@@ -470,24 +470,14 @@ Stop and escalate when any threshold is breached:
   `2000` with `FAKE_GITHUB_TOKEN` and installation `9999` with `404`. Evidence:
   `/tmp/stage-a-runner-private-port-guard-rentaneko-1-1-1.out`. Impact: the
   final Stage A CodeRabbit concerns were addressed.
-- Observation: the live checkpoint fails on the happy-path
-  `installation_token_with_buffer` call. The error is
-  `Serde Error: missing field 'message' at line 1 column 173`, which means
-  Octocrab attempted to parse Simulacat Core's token payload as a GitHub error
-  response. Evidence: `/tmp/test-live-stage-c-rentaneko-1-1-1.out`. Impact: the
-  compatibility tolerance was reached; do not patch the token response or bypass
-  `installation_token_with_buffer`.
-- Observation: focused diagnostics localized the failure to Octocrab's
-  installation-scoped path, not to the Simulacat route itself. A direct curl to
-  `/app/installations/2000/access_tokens` returned `201` with
-  `FAKE_GITHUB_TOKEN`; an app-authenticated Octocrab `_post` with a JSON body
-  also returned `201 Created`; the same `_post` after
-  `client.installation(InstallationId(2000))` failed with
-  `Serde Error: missing field 'message' at line 1 column 173`. Evidence:
-  `/tmp/diagnostic-raw-octocrab-status-body-rentaneko-1-1-1.out` and
-  `/tmp/diagnostic-installation-client-status-rentaneko-1-1-1.out`. Impact:
-  Stage C cannot be completed as planned without changing upstream Simulacat
-  Core behaviour, Octocrab behaviour, or the checkpoint's no-bypass constraint.
+- Observation: early live checkpoint runs appeared to fail on the happy-path
+  `installation_token_with_buffer` call with a missing `message` field. The
+  2026-07-18 HTTP trace supersedes that diagnosis: Octocrab omitted
+  `Content-Type: application/json`, so Simulacat Core returned a request-schema
+  `400` with a non-GitHub error body. Configuring the header makes the unchanged
+  installation `2000` route return `FAKE_GITHUB_TOKEN` and makes `9999` a typed
+  `404`. Evidence: `/tmp/octocrab-unknown.strace`. Impact: no upstream response
+  change or token-response rewrite is required.
 - Observation: Simulacat Core or its transitive dependencies can emit a
   `FORCE_COLOR`/`NO_COLOR` warning to stdout before the readiness JSON in this
   environment. Evidence: the first hand run captured the warning as the first
@@ -514,9 +504,8 @@ Stop and escalate when any threshold is breached:
   for the token. The upstream test pairs a matching
   `organizations: [{login: "rentaneko"}]` entry, which design §6 lists as
   conditional — Stage A confirmed the seeded route itself is reachable. The
-  full checkpoint still failed at Octocrab's installation-token deserialization
-  boundary, so 1.1.2 must not record "no upstream change required"; it must
-  name the smallest upstream compatibility change.
+  final checkpoint confirms the real Octocrab request is also compatible when
+  it supplies the route's required JSON content type.
 - Observation: CI does not run `make test`. `.github/workflows/ci.yml` runs
   `check-fmt`, `markdownlint`, `audit`, `lint`, then a `generate-coverage`
   action. `make lint` (`--all-targets --all-features`) is therefore the CI gate
@@ -573,11 +562,10 @@ Stop and escalate when any threshold is breached:
   adopt that shared scope so the spawn-per-test pattern is not cargo-culted
   into the managed fixture and multiplied across CI wall-clock. Date/Author:
   2026-06-21, planning agent.
-- Decision: commit a clearly named test-only RSA PEM in Stage C rather than
-  generating a key at runtime. Rationale: runtime generation would require an
-  extra Rust dev-dependency outside the plan's tolerance list, while the PEM is
-  non-credential test material and can be documented in the repository layout.
-  Date/Author: 2026-06-24, implementation agent.
+- Decision: generate the RSA-2048+ RS256 test key at runtime with `uselesskey`.
+  Rationale: a runtime-only key preserves real App-JWT signing without storing
+  private-key material in the repository, on disk, or in diagnostics.
+  Date/Author: 2026-07-18, implementation agent.
 - Decision: accept CodeRabbit's Stage A lifecycle hardening findings for the
   throwaway runner. Rationale: installing signal handlers before `listen`,
   catching `ensureClose` failures, validating the reported port, and emitting
@@ -607,30 +595,33 @@ Stop and escalate when any threshold is breached:
   this environment. The ignore must be removed when Octocrab/jsonwebtoken ship
   a buildable fixed backend or when the advised dependency leaves the graph.
   Date/Author: 2026-06-26, implementation agent.
-- Decision: accept the review follow-up fixes for the concrete
-  unknown-installation HTTP assertion, bounded stderr capture, early runner
-  signals, and production-path audit preflight. Rationale: these tighten the
-  checkpoint without widening scope, while the static fake test PEM, the guard
-  graceful ladder, and the exact BDD fixture parameter drop remain governed by
-  test-material, roadmap 1.3.2, and the generated fixture binding. Date/Author:
-  2026-07-17, implementation agent.
+- Decision: extend the checkpoint guard with bounded graceful shutdown and
+  forced-termination fallback. Rationale: this corrects ordinary checkpoint
+  teardown without claiming ownership of the managed `Simulator` lifecycle;
+  cancellation coverage and artefact supersession remain roadmap task 1.3.2.
+  Date/Author: 2026-07-18, implementation agent.
+- Decision: configure the checkpoint App client with
+  `Content-Type: application/json`. Rationale: a traced real Octocrab request
+  otherwise receives Simulacat Core's request-schema `400`, whose non-GitHub
+  error body previously appeared as Octocrab deserialization failure. The
+  existing simulator response is unchanged; with the header, installation
+  `2000` returns `FAKE_GITHUB_TOKEN` and `9999` becomes a typed `404`.
+  Date/Author: 2026-07-18, implementation agent.
 
 ## Outcomes & retrospective
 
-The checkpoint was delivered and reviewed, but it disproved the hoped-for
-compatibility. The throwaway Bun runner can seed Simulacat Core with
-installation `2000`, the raw token route returns `201` with
-`FAKE_GITHUB_TOKEN`, and the unknown-installation scenario for `9999` produces
-an Octocrab error as expected. The required happy path does not pass:
-`installation_token_with_buffer` on a real installation-scoped `octocrab`
-client fails with `Serde Error: missing field 'message' at line 1 column 173`.
+The checkpoint was delivered and reviewed. The throwaway Bun runner seeds
+Simulacat Core with installation `2000`; the real installation-scoped Octocrab
+client receives `FAKE_GITHUB_TOKEN`; and installation `9999` produces a typed
+`404 Not Found` GitHub error. The required client configuration is
+`Content-Type: application/json`. Without it, Simulacat Core returns a `400`
+request-schema error whose body does not match Octocrab's GitHub-error model.
 
-The implementation therefore satisfies roadmap 1.1.1 as a fail-fast checkpoint,
-not as proof that Rentaneko can proceed unchanged. Roadmap 1.1.2 must now
-record the upstream outcome and name the smallest Simulacat Core, Octocrab, or
-compatibility-contract change required before later lifecycle and fixture work
-continues. Rentaneko did not fork or rewrite the token payload in Rust,
-preserving the plan's no-compensation constraint.
+The implementation therefore proves roadmap task 1.1.1 compatibility and
+closes task 1.1.2 with no upstream payload or route change. Rentaneko did not
+fork or rewrite the token response. The checkpoint guard's explicit graceful
+teardown is limited to this disposable harness; managed lifecycle cancellation
+coverage and artefact supersession remain task 1.3.2.
 
 ## Context and orientation
 
@@ -700,20 +691,18 @@ Verified external facts that this plan depends on (from source inspection of
   `Result<secrecy::SecretString>`. It takes **no** id argument; the client must
   first be scoped with `octo.installation(InstallationId(2000))?`. Read the
   value with `secrecy::ExposeSecret::expose_secret()`.
-- `octocrab`'s `InstallationToken` model requires `token` and `permissions` on
-  the wire. Simulacat Core returns both
-  (`permissions: {issues:'write', contents:'read'}`), so deserialization
-  succeeds. The `permissions` presence is a Simulacat Core *default*, not
-  seed-controlled — recorded as a named upstream assumption for the 1.1.2
-  outcome.
+- Simulacat Core's route requires `Content-Type: application/json`. With that
+  header, the real installation-scoped `installation_token_with_buffer` call
+  returns `FAKE_GITHUB_TOKEN` from its `token` and `permissions` payload; an
+  unseeded installation becomes Octocrab's typed `404 Not Found` GitHub error.
 - `octocrab` 0.51.0 depends on `jsonwebtoken` major `10` (not re-exported, so a
   direct dev-dependency is required) and `secrecy` `0.10`. The checkpoint keeps
   Octocrab's default RustCrypto JWT backend because the AWS-LC backend removed
   `rsa` but failed to link in this environment. The `rsa` advisory is therefore
   handled by the documented `make audit` ignore while this code remains
   test-only. A Tokio runtime is required.
-- `EncodingKey::from_rsa_pem` accepts PKCS#1 or PKCS#8 PEM and needs a ≥2048-bit
-  RSA key (RS256). The key is test material, not a credential.
+- The runtime-only `uselesskey` RSA `rs256` fixture supplies an RSA-2048+ key
+  for App JWT signing without persisting or logging private-key material.
 - `simulation({initialState})` returns a `FoundationSimulator`;
   `await handle.listen(0, "127.0.0.1")` resolves to
   `{server, port, ensureClose}`, binding an OS-assigned port readable from
@@ -745,9 +734,9 @@ from a Bun entrypoint and serves the seeded token route.
    returns `201` with `FAKE_GITHUB_TOKEN`, and that an unknown id returns
    `404`. This hand-started variant (design §5) proves the route before Rust is
    involved. Stop the server with the captured PID.
-4. Decide the test-key strategy (commit a clearly-named test PEM with a
-   scanner-allowlist note, or generate at runtime) and the `wiremock` triage
-   posture. No `wiremock` code is written unless Stage C debugging needs it.
+4. Generate the test signing key at runtime with `uselesskey` and decide the
+   `wiremock` triage posture. No `wiremock` code is written unless Stage C
+   debugging needs it.
 
 Go/no-go: if step 1 cannot produce an importable module, or step 3 does not
 return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
@@ -771,8 +760,7 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
 ### Stage C: implementation
 
 1. Add `[dev-dependencies]` to `Cargo.toml` (see `Interfaces and dependencies`).
-2. Provide the 2048-bit RSA test key per the Stage A decision (committed PEM or
-   runtime generation).
+2. Generate the RSA-2048+ RS256 test key at runtime with `uselesskey`.
 3. Implement `tests/checkpoint_support/checkpoint_runner.ts` (the Bun
    entrypoint) emitting the v1 readiness line and wrapping its body in
    try/catch that prints a structured `error` line and exits non-zero on
@@ -784,18 +772,19 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    construct the `ThrowawayServerGuard` *immediately* so the child is owned
    before any further `?`; read stdout lines inside a `tokio::time::timeout`,
    terminating on readiness, EOF (child died → surface captured stderr), or
-   timeout; build the base URI. The guard kills the child's process group on
-   drop. Helpers return `Result`; only `#[test]`/`#[rstest]` bodies use
-   `.expect`.
+   timeout; build the base URI. Ordinary teardown sends `SIGTERM`, waits for a
+   bounded graceful exit, then force-kills and reaps only if needed; `Drop`
+   remains last-resort cleanup. Helpers return `Result`; only
+   `#[test]`/`#[rstest]` bodies use `.expect`.
 5. Implement the `octocrab` interaction inside the async steps: build the App
    client against the base URI, scope to installation `2000`, call
    `installation_token_with_buffer(chrono::Duration::seconds(60))`, expose the
    secret, and assert it equals `FAKE_GITHUB_TOKEN`; in the negative scenario,
    assert an unseeded id yields an `octocrab` error.
-6. Make the port-extractor unit test pass and run the opt-in checkpoint to the
-   real compatibility boundary. The implemented checkpoint leaves the
-   installation `2000` happy path failing with the documented Octocrab
-   deserialization error and leaves 1.1.2 to name the upstream fix.
+6. Make the port-extractor unit test pass and run the opt-in checkpoint against
+   the real compatibility boundary. The implemented checkpoint passes the
+   installation `2000` happy path and typed `9999` rejection without changing
+   Simulacat Core's response.
 
 ### Stage D: document the checkpoint outcome
 
@@ -803,7 +792,7 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    400 lines; the harness already lives in `tests/checkpoint_support/mod.rs`,
    referenced via `mod checkpoint_support;`.
 2. Update `docs/repository-layout.md` (new `tests/features/`,
-   `tests/checkpoint_support/`, `package.json`, Bun lockfile, test key),
+   `tests/checkpoint_support/`, `package.json`, Bun lockfile),
    `docs/contents.md` if a new doc is added, `docs/developers-guide.md` (a
    "Compatibility checkpoint" subsection: how to run it, the throwaway-harness
    convention, and the supersede-and-delete trigger at 1.3.1/1.3.2),
@@ -837,12 +826,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
 kill "$PID"   # never leave the hand-started server orphaned
 ```
 
-Provide the RSA test key (Stage C, if committing rather than generating):
-
-```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-  -out tests/checkpoint_support/checkpoint_test_only_key.pem
-```
+The runtime test harness generates its RSA-2048+ RS256 signing key with
+`uselesskey`; it never writes or logs private-key material.
 
 Run the Bun-free unit test (executed by CI's coverage action):
 
@@ -873,15 +858,12 @@ Red-Green-Refactor evidence to capture:
   adding the function, the parameterized cases pass (valid v1 `listening` line →
   `Some(port)`; `error` event, non-JSON noise, wrong host, missing/oversized
   port → `None`). Refactor: rerun after tidying; still green.
-- Checkpoint — Red: with the `octocrab` call stubbed to a wrong expected value
-  (or before seeding),
-  `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` fails
-  with a `404`/deserialization error or an assertion mismatch — captured
-  verbatim. Green was intentionally not forced after the real boundary failed:
-  the negative scenario passes, while the happy scenario fails with
-  `Serde Error: missing field 'message' at line 1 column 173`. This is the
-  roadmap 1.1.1 stop condition, so do not patch the token payload or bypass
-  `installation_token_with_buffer` in Rentaneko.
+- Checkpoint — Red: omit the JSON content-type header and the simulator returns
+  a schema-validation `400`; this is surfaced as a non-GitHub Octocrab error.
+  Green: with the header configured on the real App client,
+  `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'`
+  returns `FAKE_GITHUB_TOKEN` for `2000` and a typed `404 Not Found` error for
+  `9999`. The checkpoint does not patch or bypass the token response.
 
 Behaviour-driven specification (embedded; keep synchronized with the test):
 
@@ -905,17 +887,16 @@ Quality criteria (what "done" means):
 
 - Tests: the port-extractor `rstest` cases pass (and are exercised by CI's
   coverage action); both `#[ignore]`d checkpoint scenarios compile and are
-  skipped (not failed) by default; when run locally with Bun present, the
-  unknown-installation scenario passes and the installation `2000` happy path
-  fails with the documented Octocrab deserialization error.
+  skipped (not failed) by default; when run locally with Bun present, both
+  scenarios pass with the token and typed-error assertions.
 - Lint/typecheck: `make lint` passes with warnings denied (rustdoc, Clippy with
   the `clippy.toml` ceilings, Whitaker). No lint suppressions added.
 - Format: `make check-fmt` and `make markdownlint` pass; `make fmt` applied to
   Markdown changes.
 - Compatibility: the token route still returns `FAKE_GITHUB_TOKEN` outside
   Rentaneko's Rust path, the token is never modified in Rust, the
-  unknown-installation path errors, and the real Octocrab happy path failure is
-  recorded as the 1.1.2 input.
+  unknown-installation path is a typed `404`, and the real Octocrab happy path
+  returns the expected token with `Content-Type: application/json` configured.
 
 Quality method: run the three gate commands above with `tee`, then
 `coderabbit review --agent` only after they are green, and clear all concerns
@@ -990,7 +971,7 @@ use octocrab::Octocrab;
 use octocrab::models::{AppId, InstallationId};
 use secrecy::ExposeSecret;
 
-let key = jsonwebtoken::EncodingKey::from_rsa_pem(pem_bytes)?;
+let key = runtime_signing_key()?;
 let client = Octocrab::builder()
     .base_uri(base_uri)? // e.g. "http://127.0.0.1:49213"
     .app(AppId(1), key)
@@ -1038,16 +1019,15 @@ Test-only Rust items to create (no public crate API changes):
     `#[tokio::test(flavor = "current_thread")]` and
     `#[ignore = "requires Bun and Simulacat Core; run with --run-ignored"]`.
 - `tests/checkpoint_support/mod.rs`:
-  - `ThrowawayServerGuard` — owns the child; on `Drop` kills its process group;
-    exposes `base_uri()`. Marked with a `// throwaway: see roadmap 1.3.2` comment
-    so it is not mistaken for `Simulator`.
+  - `ThrowawayServerGuard` — owns the child; explicit shutdown sends its process
+    group `SIGTERM`, waits within a bound, then force-kills and reaps only when
+    needed. `Drop` is last-resort cleanup. It exposes `base_uri()` and remains
+    distinct from the roadmap 1.3.2 `Simulator`.
   - `async fn start_throwaway_server() -> Result<ThrowawayServerGuard, Box<dyn std::error::Error>>`
     — locates Bun, spawns the runner (stdout+stderr piped), constructs the guard
     atomically, awaits readiness within `tokio::time::timeout`, surfaces captured
     stderr on EOF/timeout. Decomposed into sub-70-line helpers.
 - `tests/checkpoint_support/checkpoint_runner.ts` — the Bun entrypoint above.
-- `tests/checkpoint_support/checkpoint_test_only_key.pem` — 2048-bit RSA test
-  key (only if committing; otherwise generated at runtime).
 - `tests/features/octocrab_compatibility.feature` — the two Gherkin scenarios.
 - `package.json` (+ committed Bun lockfile) — declares `simulacat-core`.
 
@@ -1102,9 +1082,10 @@ external API facts verified against `octocrab` 0.51.0 source and
 `simulacat-core` / `@simulacrum/foundation-simulator` 0.6.1 source. The
 load-bearing question — whether installation `2000` can be seeded so the route
 returns `FAKE_GITHUB_TOKEN` — was confirmed answerable "yes" by a bundled
-Simulacat Core test. Implementation later proved the narrower route result does
-not imply full Octocrab compatibility: `installation_token_with_buffer` still
-fails to deserialize the token payload.
+Simulacat Core test. A later live trace showed that the apparent Octocrab
+deserialization failure was Simulacat Core's `400` request-schema rejection
+when the client omitted `Content-Type: application/json`; the unchanged route
+is compatible once that header is configured.
 
 Revision 2 (2026-06-21): incorporated a Logisphere design-review panel
 (Pandalump, Telefono, Doggylump, Buzzy Bee, Wafflecat, Dinolump). Changes: emit
@@ -1118,8 +1099,8 @@ plus a coverage action, not `make test`); consolidate support files under
 `ThrowawayServerGuard`; add a negative (unknown-installation) scenario; add the
 supersede-and-delete clause and a per-scenario-startup note versus §9; pin the
 `simulacat-core` git dependency to a commit SHA and pin `octocrab` to `0.51.0`
-in the lockfile; address the committed-PEM secret-scanner concern; and keep the
-ADR's in-process `wiremock` stub as a diagnostic triage tool (declined as the
-primary proof, which ADR 001 reserves for the real client). Wafflecat's
-wiremock-first alternative was considered and recorded but not adopted because
-it conflicts with ADR 001's decision drivers.
+in the lockfile; use runtime-only test signing keys; and keep the ADR's
+in-process `wiremock` stub as a diagnostic triage tool (declined as the primary
+proof, which ADR 001 reserves for the real client). Wafflecat's wiremock-first
+alternative was considered and recorded but not adopted because it conflicts
+with ADR 001's decision drivers.
