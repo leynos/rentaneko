@@ -799,10 +799,9 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    `docs/users-guide.md` (the new opt-in test command and the Bun
    prerequisite), and `.gitignore` (append `node_modules/`; commit the Bun
    lockfile).
-3. Record the checkpoint outcome for the 1.1.2 decision input: roadmap 1.1.2
-   remains open and must state that the happy path failed at the
-   installation-token Octocrab boundary before any downstream lifecycle work
-   continues.
+3. Record the checkpoint outcome for task 1.1.2: the existing route is
+   compatible when the App client sends `Content-Type: application/json`; mark
+   1.1.2 complete without changing the simulator response.
 4. Run all gates, then `coderabbit review --agent`, clear concerns, and mark
    roadmap 1.1.1 done.
 
