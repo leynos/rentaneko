@@ -67,6 +67,13 @@ checked-in `simulacat-core` dependency. Run the ignored proof with
 `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` when
 you need to recheck the opt-in checkpoint.
 
+The Rust test uses the development-only `uselesskey` crate to generate a fresh
+RSA-2048+ RS256 signing key in memory at runtime. It converts the transient
+PKCS#8 representation directly into `jsonwebtoken::EncodingKey` for real
+Octocrab App JWT signing. Private-key material must never be committed,
+persisted, printed, or logged; production and public library APIs must not
+depend on `uselesskey`.
+
 The Bun runner installs `SIGINT` and `SIGTERM` handlers before listening. The
 Rust-side teardown path is separate: it sends process-group `SIGTERM`, waits
 for a bounded interval, then force-kills and reaps the child if it is still
