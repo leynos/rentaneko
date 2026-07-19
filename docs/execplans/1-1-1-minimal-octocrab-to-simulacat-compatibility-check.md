@@ -202,9 +202,22 @@ Stop and escalate when any threshold is breached:
 - [x] 2026-07-19: focused parser test 9 passed. `make check-fmt`,
   `env -u NO_COLOR make markdownlint`, `make nixie`, `make typecheck`,
   `make lint`, `make test` (`12 passed`, `2 ignored`), and `make audit` all
-  passed. The initial `make lint` found `conditional-max-n-branches`; fixing
-  it by extracting two named predicates made the rerun pass. `coderabbit review
-  --agent` completed with 0 findings.
+  passed. The initial `make lint` found `conditional-max-n-branches`; fixing it
+  by extracting two named predicates made the rerun pass.
+  `coderabbit review --agent` completed with 0 findings.
+- [x] 2026-07-19: final review reconciliation made runtime-only key handling
+  unconditional in the recovery and roadmap text, synchronized the illustrative
+  runner ordering with the source, and assigned stdin ownership plus
+  deterministic startup/capture cancellation coverage to task 1.3.2. The
+  follow-up GitHub issue was drafted with PR and review-thread backlinks but
+  not created because authorization was not given.
+- [x] 2026-07-19: final validation passed without warnings. The focused runtime
+  key and bounded-stderr tests each passed once, all nine listening-port cases
+  passed, and `make check-fmt`, `make markdownlint`, `make typecheck`,
+  `make lint`, `make test` (`12 passed`, `2 skipped`), and `make audit` passed.
+  The opt-in checkpoint passed both scenarios: installation `2000` returned
+  `FAKE_GITHUB_TOKEN`, and installation `9999` produced the asserted typed
+  Octocrab `404 Not Found` error without response rewriting.
 - [x] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
 - [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
@@ -231,9 +244,9 @@ Stop and escalate when any threshold is breached:
   an Octocrab error, but the required happy-path
   `installation_token_with_buffer` call fails by treating the token payload as
   a GitHub error response.
-- [x] Stage C: implement the Bun entrypoint, test key, harness (with timeout,
-  stderr capture, atomic guard, EOF/error handling), and the `octocrab` calls
-  until the planned compatibility boundary is exercised.
+- [x] Stage C: implement the Bun entrypoint, runtime-only signing key, harness
+  (with timeout, stderr capture, atomic guard, EOF/error handling), and the
+  `octocrab` calls until the planned compatibility boundary is exercised.
 - [x] 2026-06-24: deterministic default gates are green after the compatibility
   stop. Evidence: `/tmp/fmt-rentaneko-1-1-1-no-expect.out`,
   `/tmp/check-fmt-rentaneko-1-1-1-no-expect.out`,
@@ -401,6 +414,10 @@ Stop and escalate when any threshold is breached:
 - Observation: the Bun readiness schema is enforced in the parser and covered
   by parser tests for `version == 1` plus the port range; that contract is
   distinct from the Octocrab `Content-Type` compatibility issue.
+- Observation: the duplicated runner excerpt still registered signal handlers
+  after `listen`, despite the source installing them first. Impact: retain only
+  an abbreviated ordering excerpt and treat
+  `tests/checkpoint_support/checkpoint_runner.ts` as authoritative.
 - Observation: installing the pinned toolchain's `rust-analyzer` component and
   restarting the `leta` daemon restored Rust symbol discovery. Evidence:
   `rustup component add rust-analyzer`, `leta daemon restart`, and a follow-up
@@ -565,12 +582,12 @@ Stop and escalate when any threshold is breached:
   execution". Date/Author: 2026-06-21, planning agent.
 - Decision (superseded): the checkpoint's process handling was originally a
   minimal throwaway RAII guard (named to be un-promotable, e.g.
-  `ThrowawayServerGuard`, with a marker comment pointing at 1.3.2) that
-  bounded startup, captured stderr, and killed its owned child (process group
-  on Linux) on drop. That note is superseded by the 2026-07-18 lifecycle
-  update that added bounded graceful shutdown and forced-termination fallback;
-  managed `Simulator` lifecycle/cancellation and artefact supersession remain
-  roadmap task 1.3.2. Date/Author: 2026-06-21, planning agent.
+  `ThrowawayServerGuard`, with a marker comment pointing at 1.3.2) that bounded
+  startup, captured stderr, and killed its owned child (process group on Linux)
+  on drop. That note is superseded by the 2026-07-18 lifecycle update that
+  added bounded graceful shutdown and forced-termination fallback; managed
+  `Simulator` lifecycle/cancellation and artefact supersession remain roadmap
+  task 1.3.2. Date/Author: 2026-06-21, planning agent.
 - Decision: one throwaway server per scenario is acceptable here *only* because
   there is a single ignored scenario family. Rationale: design §9 recommends
   sharing one read-only simulator at module/package scope; 1.3.2 and 1.4.3 must
@@ -613,8 +630,10 @@ Stop and escalate when any threshold is breached:
 - Decision: extend the checkpoint guard with bounded graceful shutdown and
   forced-termination fallback. Rationale: this corrects ordinary checkpoint
   teardown without claiming ownership of the managed `Simulator` lifecycle;
-  cancellation coverage and artefact supersession remain roadmap task 1.3.2.
-  Date/Author: 2026-07-18, implementation agent.
+  deterministic cancellation or `SIGTERM` coverage during startup and in-flight
+  stdout/stderr capture, stdin ownership, and replacement or folding of this
+  checkpoint-only guard remain roadmap task 1.3.2. Date/Author: 2026-07-18,
+  implementation agent.
 - Decision: configure the checkpoint App client with
   `Content-Type: application/json`. Rationale: a traced real Octocrab request
   otherwise receives Simulacat Core's request-schema `400`, whose non-GitHub
@@ -624,9 +643,9 @@ Stop and escalate when any threshold is breached:
   Date/Author: 2026-07-18, implementation agent.
 - Decision: keep the Bun readiness schema parser strict on the v1 listening
   event shape (`version == 1`, `port` in `1..=65535`) and cover that contract
-  with parser tests. Rationale: this is the readiness follow-up from the
-  review pass; the Octocrab `Content-Type` fix remains a separate HTTP
-  compatibility decision. Date/Author: 2026-07-19, review pass.
+  with parser tests. Rationale: this is the readiness follow-up from the review
+  pass; the Octocrab `Content-Type` fix remains a separate HTTP compatibility
+  decision. Date/Author: 2026-07-19, review pass.
 
 ## Outcomes & retrospective
 
@@ -641,11 +660,14 @@ The implementation therefore proves roadmap task 1.1.1 compatibility and closes
 task 1.1.2 with no upstream payload or route change. Rentaneko did not fork or
 rewrite the token response. The checkpoint guard's explicit graceful teardown
 is limited to this disposable harness; managed lifecycle cancellation coverage
-and artefact supersession remain task 1.3.2.
-This review pass removed the obsolete committed-key recovery wording and kept
-the readiness follow-up separate from the Octocrab header fix: the Bun parser
-enforces `version == 1` and the port range, while
-`Content-Type: application/json` addresses the HTTP compatibility finding.
+and artefact supersession remain task 1.3.2. This review pass removed the
+obsolete committed-key recovery wording and kept the readiness follow-up
+separate from the Octocrab header fix: the Bun parser enforces `version == 1`
+and the port range, while `Content-Type: application/json` addresses the HTTP
+compatibility finding. The follow-up issue for the managed task 1.3.2 lifecycle
+is drafted, not created; that task must replace or fold the checkpoint-only
+guard and add deterministic cancellation and `SIGTERM` coverage during startup
+and in-flight stdout/stderr capture.
 
 ## Context and orientation
 
@@ -934,7 +956,8 @@ before marking the task done.
   failed or panicked run leaves no managed state because the guard is
   constructed atomically with the spawn. The Stage A hand-started server is
   stopped via the captured `$PID`; the test-managed harness never relies on it.
-- If generating at runtime, no artefact persists.
+- Runtime generation keeps the signing key in memory only, so no key artefact
+  persists.
 - All Rust changes are confined to `tests/`, `Cargo.toml`'s
   `[dev-dependencies]`, and docs, so reverting the commit fully restores the
   prior state. The supersede-and-delete clause governs removal when 1.3.1/1.3.2
@@ -942,48 +965,40 @@ before marking the task done.
 
 ## Artefacts and notes
 
-The throwaway Bun entrypoint (final form to verify against the resolved
-`foundation-simulator` version; note the v1 readiness shape and the error path):
+The authoritative throwaway Bun entrypoint is
+`tests/checkpoint_support/checkpoint_runner.ts`. It installs idempotent signal
+handlers before awaiting `listen`, then closes a late-created handle if a
+signal arrived during startup. This abbreviated excerpt records the ordering;
+the source file remains authoritative for timeout, readiness, and diagnostic
+details:
 
 ```typescript
-/** @file Throwaway Simulacat Core server for the 1.1.1 compatibility checkpoint.
- *  Superseded by the managed runner in roadmap 1.3.1 — delete then. */
-import {simulation, type InitialState} from "simulacat-core";
+const app = simulation({ initialState });
+let handle: Awaited<ReturnType<typeof app.listen>> | undefined;
+let isShuttingDown = false;
 
-const initialState: InitialState = {
-  users: [],
-  installations: [{id: 2000, account: "rentaneko", app_id: 1}],
-  organizations: [{login: "rentaneko"}],
-  repositories: [],
-  branches: [],
-  blobs: [],
+const shutdown = async () => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  await closeHandle();
 };
 
-try {
-  const app = simulation({initialState});
-  const handle = await app.listen(0, "127.0.0.1");
-  const address = handle.server.address();
-  const port = typeof address === "object" && address ? address.port : handle.port;
-  process.stdout.write(
-    `${JSON.stringify({version: 1, event: "listening", host: "127.0.0.1", port})}\n`,
-  );
-  const shutdown = async () => {
-    await handle.ensureClose();
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-} catch (error) {
-  process.stdout.write(
-    `${JSON.stringify({version: 1, event: "error", message: String(error)})}\n`,
-  );
-  process.exit(1);
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+handle = await withTimeout(
+  app.listen(0, "127.0.0.1"),
+  LISTEN_TIMEOUT_MS,
+  "Simulacat Core listen",
+);
+if (isShuttingDown) {
+  await closeHandle();
 }
 ```
 
-The committed `.ts` is not covered by the repository's Rust lint regime; keep
-it minimal (≤30 lines). A Biome gate for TypeScript can be added later (see the
-`biomejs` skill) but is out of scope for this checkpoint.
+The committed `.ts` is not covered by the repository's Rust lint regime. A
+Biome gate for TypeScript can be added later (see the `biomejs` skill) but is
+out of scope for this checkpoint.
 
 Minimal `octocrab` call shape used inside the async step (illustrative):
 
@@ -1034,9 +1049,9 @@ Test-only Rust items to create (no public crate API changes):
   - `mod checkpoint_support;` — the harness module below, which owns the pure
     `parse_listening_port(line: &str) -> Option<u16>` helper. The integration
     test unit-tests that helper with `#[rstest]` cases. It parses one JSON
-    line, requires `event == "listening"` and `host == "127.0.0.1"`, returns
-    the port via `u16::try_from` (no truncating casts), and ignores `version`
-    plus any additive fields. Full v1 parsing is roadmap 1.2.2.
+    line, requires `version == 1`, `event == "listening"`, loopback host, and a
+    port in `1..=65535`, and ignores additive fields. Full v1 parsing is
+    roadmap 1.2.2.
   - the `#[scenario]`-bound async tests driving both scenarios; each annotated
     `#[tokio::test(flavor = "current_thread")]` and
     `#[ignore = "requires Bun and Simulacat Core; run with --run-ignored"]`.

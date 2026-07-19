@@ -116,10 +116,10 @@ exports are needed now or can wait. See rentaneko-design.md §§6, 9, and 10.
 - [ ] 1.4.2. Build the App-authenticated `octocrab` factory.
   - Requires 1.1.1 and 1.4.1.
   - See rentaneko-design.md §10.
-  - Generate an RSA-2048+ RS256 key at runtime with `uselesskey`, convert it
-    in memory, configure `Octocrab::builder()` with the simulator base URI and
-    App ID `1`, and align the `octocrab` crate version with Podbot's incubator
-    dependency.
+  - Generate a runtime-only RSA-2048+ RS256 key with `uselesskey` without
+    logging or persisting it, convert it in memory, configure
+    `Octocrab::builder()` with the simulator base URI and App ID `1`, and align
+    the `octocrab` crate version with Podbot's incubator dependency.
   - Success: `installation_token_with_buffer` against installation `2000`
     returns `FAKE_GITHUB_TOKEN` through the managed runner.
 - [ ] 1.4.3. Add the narrow `OctocrabFixture` convenience type.
