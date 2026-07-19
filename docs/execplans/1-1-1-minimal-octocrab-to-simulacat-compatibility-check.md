@@ -19,10 +19,10 @@ lifecycle machinery is built. See [rentaneko-design.md](../rentaneko-design.md)
 The single irreducible fact only real Rust can prove (beyond what a one-line
 `curl` already shows) is this: `octocrab` 0.51.0 constructs an RS256 JSON Web
 Token that Simulacat Core's permissive authentication *accepts* and, with
-`Content-Type: application/json`, receives `FAKE_GITHUB_TOKEN` through the
-real `InstallationToken` path. The Rust harness also proves that installation
-`9999` reaches Octocrab's typed `404 Not Found` GitHub error. This is exactly
-the boundary Podbot depends on (ADR 001 decision drivers).
+`Content-Type: application/json`, receives `FAKE_GITHUB_TOKEN` through the real
+`InstallationToken` path. The Rust harness also proves that installation `9999`
+reaches Octocrab's typed `404 Not Found` GitHub error. This is exactly the
+boundary Podbot depends on (ADR 001 decision drivers).
 
 After this change, a developer can run the single, opt-in checkpoint test that:
 
@@ -37,10 +37,9 @@ After this change, a developer can run the single, opt-in checkpoint test that:
 The observable result is:
 `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` passes
 both scenarios against the pinned simulator dependency. The deliverable is
-deliberately a *throwaway* harness, not the managed
-`Simulator` handle; that handle is later roadmap work (1.3.2), and the
-throwaway artefacts carry an explicit supersede-and-delete clause (see
-Constraints).
+deliberately a *throwaway* harness, not the managed `Simulator` handle; that
+handle is later roadmap work (1.3.2), and the throwaway artefacts carry an
+explicit supersede-and-delete clause (see Constraints).
 
 This plan closes out task 1.1.2's upstream outcome: no Simulacat Core response
 change is required. The earlier deserialization symptom came from a `400`
@@ -196,6 +195,9 @@ Stop and escalate when any threshold is breached:
 
 ## Progress
 
+- [x] 2026-07-19: review pass cleaned the stale lifecycle wording, removed the
+  committed-key recovery branch, and kept the readiness-schema follow-up
+  recorded in the outcomes section.
 - [x] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
 - [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
@@ -367,8 +369,8 @@ Stop and escalate when any threshold is breached:
   both installation `2000` (`FAKE_GITHUB_TOKEN`) and `9999` (typed `404`). A
   separate shutdown unit test would need to mock a real child, process group,
   and reaping boundary; the ignored checkpoint covers that process behaviour,
-  while cancellation-interleaving coverage remains task 1.3.2.
-  Evidence: current `/tmp/check-fmt-...review-followup.out`,
+  while cancellation-interleaving coverage remains task 1.3.2. Evidence: current
+  `/tmp/check-fmt-...review-followup.out`,
   `/tmp/markdownlint-...review-followup.out`,
   `/tmp/typecheck-...review-followup.out`, `/tmp/lint-...review-followup.out`,
   `/tmp/test-...review-followup.out`, `/tmp/audit-...review-followup.out`, and
@@ -385,6 +387,10 @@ Stop and escalate when any threshold is breached:
   `Language server 'rust-analyzer' for rust failed to start`. Impact: use
   repository-local inspection for non-symbol material and retry `leta` after
   checking the installed toolchain before editing Rust helpers.
+- Observation: the lifecycle note that said graceful shutdown and
+  forced-termination were omitted is now stale; the later 2026-07-18 update
+  owns those behaviours, while managed lifecycle/cancellation and artefact
+  supersession still belong to roadmap task 1.3.2.
 - Observation: installing the pinned toolchain's `rust-analyzer` component and
   restarting the `leta` daemon restored Rust symbol discovery. Evidence:
   `rustup component add rust-analyzer`, `leta daemon restart`, and a follow-up
@@ -474,10 +480,10 @@ Stop and escalate when any threshold is breached:
   `installation_token_with_buffer` call with a missing `message` field. The
   2026-07-18 HTTP trace supersedes that diagnosis: Octocrab omitted
   `Content-Type: application/json`, so Simulacat Core returned a request-schema
-  `400` with a non-GitHub error body. Configuring the header makes the unchanged
-  installation `2000` route return `FAKE_GITHUB_TOKEN` and makes `9999` a typed
-  `404`. Evidence: `/tmp/octocrab-unknown.strace`. Impact: no upstream response
-  change or token-response rewrite is required.
+  `400` with a non-GitHub error body. Configuring the header makes the
+  unchanged installation `2000` route return `FAKE_GITHUB_TOKEN` and makes
+  `9999` a typed `404`. Evidence: `/tmp/octocrab-unknown.strace`. Impact: no
+  upstream response change or token-response rewrite is required.
 - Observation: Simulacat Core or its transitive dependencies can emit a
   `FORCE_COLOR`/`NO_COLOR` warning to stdout before the readiness JSON in this
   environment. Evidence: the first hand run captured the warning as the first
@@ -547,15 +553,14 @@ Stop and escalate when any threshold is breached:
   `.await`, and matches the rstest-bdd async guidance in
   [rstest-bdd-users-guide.md](../rstest-bdd-users-guide.md) §"Async scenario
   execution". Date/Author: 2026-06-21, planning agent.
-- Decision: the checkpoint's process handling is a minimal throwaway RAII guard
-  (named to be un-promotable, e.g. `ThrowawayServerGuard`, with a marker
-  comment pointing at 1.3.2) that bounds startup, captures stderr, and kills
-  its owned child (process group on Linux) on drop; it deliberately omits the
-  graceful-then-kill ladder, stdin-EOF self-termination, and the NDJSON parser.
-  Rationale: those belong to roadmap 1.2.2 / 1.3.2; pulling them forward would
-  breach the §5 fail-fast intent and this plan's scope constraint, and an
-  un-promotable name stops the kill-on-drop-only teardown from being copied
-  into the real `Simulator`. Date/Author: 2026-06-21, planning agent.
+- Decision (superseded): the checkpoint's process handling was originally a
+  minimal throwaway RAII guard (named to be un-promotable, e.g.
+  `ThrowawayServerGuard`, with a marker comment pointing at 1.3.2) that
+  bounded startup, captured stderr, and killed its owned child (process group
+  on Linux) on drop. That note is superseded by the 2026-07-18 lifecycle
+  update that added bounded graceful shutdown and forced-termination fallback;
+  managed `Simulator` lifecycle/cancellation and artefact supersession remain
+  roadmap task 1.3.2. Date/Author: 2026-06-21, planning agent.
 - Decision: one throwaway server per scenario is acceptable here *only* because
   there is a single ignored scenario family. Rationale: design §9 recommends
   sharing one read-only simulator at module/package scope; 1.3.2 and 1.4.3 must
@@ -617,11 +622,14 @@ client receives `FAKE_GITHUB_TOKEN`; and installation `9999` produces a typed
 `Content-Type: application/json`. Without it, Simulacat Core returns a `400`
 request-schema error whose body does not match Octocrab's GitHub-error model.
 
-The implementation therefore proves roadmap task 1.1.1 compatibility and
-closes task 1.1.2 with no upstream payload or route change. Rentaneko did not
-fork or rewrite the token response. The checkpoint guard's explicit graceful
-teardown is limited to this disposable harness; managed lifecycle cancellation
-coverage and artefact supersession remain task 1.3.2.
+The implementation therefore proves roadmap task 1.1.1 compatibility and closes
+task 1.1.2 with no upstream payload or route change. Rentaneko did not fork or
+rewrite the token response. The checkpoint guard's explicit graceful teardown
+is limited to this disposable harness; managed lifecycle cancellation coverage
+and artefact supersession remain task 1.3.2.
+This review pass removed the obsolete committed-key recovery wording and kept
+the readiness-schema follow-up documented as the `Content-Type` requirement,
+not a payload-shape regression.
 
 ## Context and orientation
 
@@ -774,8 +782,8 @@ return `FAKE_GITHUB_TOKEN`, do not proceed — record the outcome for 1.1.2.
    terminating on readiness, EOF (child died → surface captured stderr), or
    timeout; build the base URI. Ordinary teardown sends `SIGTERM`, waits for a
    bounded graceful exit, then force-kills and reaps only if needed; `Drop`
-   remains last-resort cleanup. Helpers return `Result`; only
-   `#[test]`/`#[rstest]` bodies use `.expect`.
+   remains last-resort cleanup. Helpers return `Result`; only `#[test]`/
+   `#[rstest]` bodies use `.expect`.
 5. Implement the `octocrab` interaction inside the async steps: build the App
    client against the base URI, scope to installation `2000`, call
    `installation_token_with_buffer(chrono::Duration::seconds(60))`, expose the
@@ -910,8 +918,7 @@ before marking the task done.
   failed or panicked run leaves no managed state because the guard is
   constructed atomically with the spawn. The Stage A hand-started server is
   stopped via the captured `$PID`; the test-managed harness never relies on it.
-- If committing the test key, re-running `openssl genpkey` overwrites it safely
-  (it is not secret). If generating at runtime, no artefact persists.
+- If generating at runtime, no artefact persists.
 - All Rust changes are confined to `tests/`, `Cargo.toml`'s
   `[dev-dependencies]`, and docs, so reverting the commit fully restores the
   prior state. The supersede-and-delete clause governs removal when 1.3.1/1.3.2
