@@ -60,6 +60,21 @@ not assert Podbot's token-file permissions, temporary-file cleanup, or
 atomic-rename behaviour. Podbot owns those filesystem contracts and should test
 them directly.
 
+### Compatibility Checkpoint
+
+The 1.1.1 compatibility checkpoint requires Bun `1.3.11` or newer and the
+checked-in `simulacat-core` dependency. Run the ignored proof with
+`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` when
+you need to recheck the opt-in checkpoint.
+
+The Bun runner handles `SIGINT`, `SIGTERM`, and stdin closure. The Rust-side
+teardown path is separate: it sends process-group `SIGTERM`, waits for a
+bounded interval, then force-kills and reaps the child if it is still alive.
+`Drop` remains synchronous and best-effort last-resort cleanup.
+
+Delete this subsection once roadmap tasks 1.3.1 and 1.3.2 replace the throwaway
+runner with the owned Bun process and Rust process handle.
+
 ## Tooling
 
 Development builds use Cranelift for debug code generation. On Linux targets,

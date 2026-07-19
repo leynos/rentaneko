@@ -160,20 +160,29 @@ async fn read_listening_port(stdout: impl AsyncRead + Unpin) -> Result<u16, BoxE
 
 pub(crate) fn parse_listening_port(line: &str) -> Option<u16> {
     let value: Value = serde_json::from_str(line).ok()?;
+    let version = value.get("version").and_then(Value::as_u64)?;
     let event = value.get("event").and_then(Value::as_str)?;
     let host = value.get("host").and_then(Value::as_str)?;
     let port = value.get("port").and_then(Value::as_u64)?;
-    listening_port(event, host, port)
+    listening_port(version, event, host, port)
 }
 
-fn listening_port(event: &str, host: &str, port: u64) -> Option<u16> {
-    // The throwaway runner must emit this literal host so the Rust harness
-    // never accidentally targets a non-loopback listener.
-    if event == "listening" && host == "127.0.0.1" {
+fn listening_port(version: u64, event: &str, host: &str, port: u64) -> Option<u16> {
+    if is_supported_readiness(version, event) && is_loopback_endpoint(host, port) {
         u16::try_from(port).ok()
     } else {
         None
     }
+}
+
+fn is_supported_readiness(version: u64, event: &str) -> bool {
+    version == 1 && event == "listening"
+}
+
+fn is_loopback_endpoint(host: &str, port: u64) -> bool {
+    // The throwaway runner must emit this literal host so the Rust harness
+    // never accidentally targets a non-loopback listener.
+    host == "127.0.0.1" && port != 0
 }
 
 async fn capture_stderr(

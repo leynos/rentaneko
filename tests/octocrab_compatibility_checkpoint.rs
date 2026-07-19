@@ -65,6 +65,15 @@ fn checkpoint_state() -> CheckpointState {
     None
 )]
 #[case::requires_port(r#"{"version":1,"event":"listening","host":"127.0.0.1"}"#, None)]
+#[case::requires_version(r#"{"event":"listening","host":"127.0.0.1","port":49213}"#, None)]
+#[case::rejects_unsupported_version(
+    r#"{"version":2,"event":"listening","host":"127.0.0.1","port":49213}"#,
+    None
+)]
+#[case::rejects_zero_port(
+    r#"{"version":1,"event":"listening","host":"127.0.0.1","port":0}"#,
+    None
+)]
 #[case::rejects_oversized_port(
     r#"{"version":1,"event":"listening","host":"127.0.0.1","port":70000}"#,
     None

@@ -290,8 +290,8 @@ works cleanly when the consumer and fixture resolve the same major and minor
 crate version. Podbot currently uses `octocrab` 0.51.0.
 
 The fixture should generate an RSA-2048+ RS256 test key at runtime with
-`uselesskey`. The key must remain in memory and must not be logged or persisted.
-The client factory should:
+`uselesskey`. The key must remain in memory and must not be logged or
+persisted. The client factory should:
 
 - convert the runtime-only signing key into `jsonwebtoken::EncodingKey`;
 - call `Octocrab::builder().base_uri(simulator_base_uri)?.app(AppId(1), key)`;
