@@ -196,8 +196,9 @@ Stop and escalate when any threshold is breached:
 ## Progress
 
 - [x] 2026-07-19: review pass cleaned the stale lifecycle wording, removed the
-  committed-key recovery branch, and kept the readiness-schema follow-up
-  recorded in the outcomes section.
+  committed-key recovery branch, and clarified that readiness-schema means the
+  Bun parser contract (`version == 1` and `port` in `1..=65535`), with tests
+  enforcing it.
 - [x] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
 - [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
@@ -391,6 +392,9 @@ Stop and escalate when any threshold is breached:
   forced-termination were omitted is now stale; the later 2026-07-18 update
   owns those behaviours, while managed lifecycle/cancellation and artefact
   supersession still belong to roadmap task 1.3.2.
+- Observation: the Bun readiness schema is enforced in the parser and covered
+  by parser tests for `version == 1` plus the port range; that contract is
+  distinct from the Octocrab `Content-Type` compatibility issue.
 - Observation: installing the pinned toolchain's `rust-analyzer` component and
   restarting the `leta` daemon restored Rust symbol discovery. Evidence:
   `rustup component add rust-analyzer`, `leta daemon restart`, and a follow-up
@@ -612,6 +616,11 @@ Stop and escalate when any threshold is breached:
   existing simulator response is unchanged; with the header, installation
   `2000` returns `FAKE_GITHUB_TOKEN` and `9999` becomes a typed `404`.
   Date/Author: 2026-07-18, implementation agent.
+- Decision: keep the Bun readiness schema parser strict on the v1 listening
+  event shape (`version == 1`, `port` in `1..=65535`) and cover that contract
+  with parser tests. Rationale: this is the readiness follow-up from the
+  review pass; the Octocrab `Content-Type` fix remains a separate HTTP
+  compatibility decision. Date/Author: 2026-07-19, review pass.
 
 ## Outcomes & retrospective
 
@@ -628,8 +637,9 @@ rewrite the token response. The checkpoint guard's explicit graceful teardown
 is limited to this disposable harness; managed lifecycle cancellation coverage
 and artefact supersession remain task 1.3.2.
 This review pass removed the obsolete committed-key recovery wording and kept
-the readiness-schema follow-up documented as the `Content-Type` requirement,
-not a payload-shape regression.
+the readiness follow-up separate from the Octocrab header fix: the Bun parser
+enforces `version == 1` and the port range, while
+`Content-Type: application/json` addresses the HTTP compatibility finding.
 
 ## Context and orientation
 
