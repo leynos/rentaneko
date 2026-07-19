@@ -199,6 +199,12 @@ Stop and escalate when any threshold is breached:
   committed-key recovery branch, and clarified that readiness-schema means the
   Bun parser contract (`version == 1` and `port` in `1..=65535`), with tests
   enforcing it.
+- [x] 2026-07-19: focused parser test 9 passed. `make check-fmt`,
+  `env -u NO_COLOR make markdownlint`, `make nixie`, `make typecheck`,
+  `make lint`, `make test` (`12 passed`, `2 ignored`), and `make audit` all
+  passed. The initial `make lint` found `conditional-max-n-branches`; fixing
+  it by extracting two named predicates made the rerun pass. `coderabbit review
+  --agent` completed with 0 findings.
 - [x] 2026-06-24: implementation approved and started on branch
   `1-1-1-minimal-octocrab-to-simulacat-compatibility-check`.
 - [x] 2026-06-24: Stage A go/no-go passed. `simulacat-core` is installed from
