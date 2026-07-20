@@ -60,7 +60,7 @@ not assert Podbot's token-file permissions, temporary-file cleanup, or
 atomic-rename behaviour. Podbot owns those filesystem contracts and should test
 them directly.
 
-### Compatibility Checkpoint
+### Compatibility checkpoint
 
 The 1.1.1 compatibility checkpoint requires Bun `1.3.11` or newer and the
 checked-in `simulacat-core` dependency. Run the ignored proof with

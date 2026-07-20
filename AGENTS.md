@@ -326,9 +326,9 @@ project:
   ```
 
   Use the same command with `--check` to detect drift without rewriting the
-  tracked file. The separate consumer phrase check enforces corrections, such
-  as replacing the hyphenated form with `handwritten`, that Typos cannot match
-  as whole phrases.
+  tracked file. The separate consumer phrase check enforces corrections that
+  Typos cannot match as whole phrases, such as replacing the hyphenated form
+  with `handwritten`.
 - Quoted APIs and identifiers retain upstream spelling. Put them in backticks
   or fenced code blocks, which the spelling gate ignores, rather than adding
   word-level exceptions.

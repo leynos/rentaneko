@@ -52,7 +52,7 @@ impl ThrowawayServerGuard {
         terminate_process_group(child.id());
         let graceful_shutdown = timeout(SHUTDOWN_TIMEOUT, child.wait()).await;
         let result = match graceful_shutdown {
-            Ok(Ok(_)) => Ok(()),
+            Ok(Ok(status)) => exit_status_result(status),
             Ok(Err(error)) => force_kill_and_reap(&mut child, error).await,
             Err(_) => force_kill_and_reap(&mut child, "graceful shutdown timed out").await,
         };
@@ -271,11 +271,38 @@ use nix::{
 };
 
 #[cfg(unix)]
-fn terminate_process_group(maybe_child_id: Option<u32>) {
+fn signal_process_group(maybe_child_id: Option<u32>, signal: Signal) {
     if let Some(pid) = maybe_child_id.and_then(process_group_pid) {
-        match kill(pid, Signal::SIGTERM) {
+        // The group may already be gone; a failed signal is not actionable here.
+        match kill(pid, signal) {
             Ok(()) | Err(_) => {}
         }
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process_group(maybe_child_id: Option<u32>) {
+    signal_process_group(maybe_child_id, Signal::SIGTERM);
+}
+
+#[cfg(unix)]
+fn force_kill_process_group(child: &Child) { signal_process_group(child.id(), Signal::SIGKILL); }
+
+#[cfg(not(unix))]
+fn force_kill_process_group(_child: &Child) {}
+
+/// Maps a reaped child's exit status onto the shutdown result.
+///
+/// A non-success status (non-zero exit code, or signal termination on Unix)
+/// means the throwaway server failed to shut down cleanly, so surface it rather
+/// than swallowing it.
+fn exit_status_result(status: std::process::ExitStatus) -> Result<(), BoxError> {
+    if status.success() {
+        Ok(())
+    } else {
+        Err(Box::new(io::Error::other(format!(
+            "throwaway server exited with failure status: {status}"
+        ))) as BoxError)
     }
 }
 
@@ -283,6 +310,9 @@ async fn force_kill_and_reap(
     child: &mut Child,
     graceful_shutdown_error: impl std::fmt::Display,
 ) -> Result<(), BoxError> {
+    // SIGKILL the whole process group first so any grandchildren spawned by the
+    // runner die too, not just the direct child reaped by `start_kill`.
+    force_kill_process_group(child);
     child.start_kill()?;
     child.wait().await.map(|_| ()).map_err(|force_kill_error| {
         Box::new(io::Error::other(format!(
@@ -303,20 +333,4 @@ fn process_group_pid(process_group_id: u32) -> Option<Pid> {
 fn terminate_process_group(_child_id: Option<u32>) {}
 
 #[cfg(test)]
-mod tests {
-    //! Tests for bounded checkpoint diagnostics.
-
-    use super::{MAX_CAPTURED_STDERR_BYTES, STDERR_TRUNCATION_MARKER, StderrCapture};
-
-    #[test]
-    fn stderr_capture_retains_only_the_latest_output() {
-        let mut capture = StderrCapture::default();
-        capture.append(&"discarded".repeat(MAX_CAPTURED_STDERR_BYTES));
-        capture.append("retained");
-
-        let output = capture.as_str();
-        assert!(output.starts_with(STDERR_TRUNCATION_MARKER));
-        assert!(output.ends_with("retained"));
-        assert!(output.len() <= STDERR_TRUNCATION_MARKER.len() + MAX_CAPTURED_STDERR_BYTES);
-    }
-}
+mod tests;

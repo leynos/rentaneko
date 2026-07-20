@@ -492,11 +492,12 @@ Stop and escalate when any threshold is breached:
   `/tmp/stage-a-runner-final-lifecycle-rentaneko-1-1-1.out`. Impact: the Stage
   A runner lifecycle concerns were addressed.
 - Observation: after the retry CodeRabbit review, shutdown waits are bounded to
-  3 seconds, signal handlers are registered only after `listen` returns a
-  handle, `packageManager` declares `bun@1.3.11`, and the runner still served
-  installation `2000` with `FAKE_GITHUB_TOKEN` and installation `9999` with
-  `404`. Evidence: `/tmp/stage-a-runner-shutdown-timeout-rentaneko-1-1-1.out`.
-  Impact: the remaining Stage A CodeRabbit concerns were addressed.
+  3 seconds, `packageManager` declares `bun@1.3.11`, and the runner still
+  served installation `2000` with `FAKE_GITHUB_TOKEN` and installation `9999`
+  with `404` (superseded: signal handlers now register before `listen`; full
+  lifecycle coverage is deferred to roadmap task 1.3.2). Evidence:
+  `/tmp/stage-a-runner-shutdown-timeout-rentaneko-1-1-1.out`. Impact: the
+  remaining Stage A CodeRabbit concerns were addressed.
 - Observation: after the final metadata and validation review, `package.json`
   is private, port validation rejects non-finite and out-of-range values, the
   shutdown handle guard is explicit, and the runner still served installation
@@ -1004,6 +1005,7 @@ Minimal `octocrab` call shape used inside the async step (illustrative):
 
 ```rust,no_run
 use chrono::Duration;
+use http::header::CONTENT_TYPE;
 use octocrab::Octocrab;
 use octocrab::models::{AppId, InstallationId};
 use secrecy::ExposeSecret;
@@ -1011,6 +1013,7 @@ use secrecy::ExposeSecret;
 let key = runtime_signing_key()?;
 let client = Octocrab::builder()
     .base_uri(base_uri)? // e.g. "http://127.0.0.1:49213"
+    .add_header(CONTENT_TYPE, "application/json".to_owned())
     .app(AppId(1), key)
     .build()?;
 let token = client

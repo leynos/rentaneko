@@ -27,7 +27,10 @@ try {
     try {
       await withTimeout(handle.ensureClose(), SHUTDOWN_TIMEOUT_MS, "checkpoint shutdown");
     } catch (error) {
-      process.stderr.write(`checkpoint shutdown warning: ${errorMessage(error)}\n`);
+      // Surface a non-zero exit so the Rust harness treats the failed shutdown
+      // as an error rather than a clean stop.
+      process.stderr.write(`checkpoint shutdown failure: ${errorMessage(error)}\n`);
+      process.exit(1);
     }
     process.exit(0);
   };
