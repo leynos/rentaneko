@@ -647,6 +647,18 @@ Stop and escalate when any threshold is breached:
   with parser tests. Rationale: this is the readiness follow-up from the review
   pass; the Octocrab `Content-Type` fix remains a separate HTTP compatibility
   decision. Date/Author: 2026-07-19, review pass.
+- Decision: add deterministic teardown coverage for the disposable checkpoint
+  guard. Rationale: this validates checkpoint-level signal and cleanup
+  behaviour — process exit or signalling before readiness, in-flight
+  stdout/stderr capture cancellation, graceful-shutdown failure propagation,
+  and no surviving process-group descendant after either `Drop` or `shutdown` —
+  using explicit pipes, readiness markers, and task-join barriers rather than
+  sleeps, and without Bun, Simulacat Core, or network access.
+  Managed-`Simulator` resource ownership, stdin ownership, replacement or
+  folding of this checkpoint-only guard, and the full lifecycle contract remain
+  roadmap task 1.3.2 (issue
+  [#24](https://github.com/leynos/rentaneko/issues/24)). Date/Author:
+  2026-07-22, implementation agent.
 
 ## Outcomes & retrospective
 
@@ -660,15 +672,20 @@ request-schema error whose body does not match Octocrab's GitHub-error model.
 The implementation therefore proves roadmap task 1.1.1 compatibility and closes
 task 1.1.2 with no upstream payload or route change. Rentaneko did not fork or
 rewrite the token response. The checkpoint guard's explicit graceful teardown
-is limited to this disposable harness; managed lifecycle cancellation coverage
-and artefact supersession remain task 1.3.2. This review pass removed the
-obsolete committed-key recovery wording and kept the readiness follow-up
-separate from the Octocrab header fix: the Bun parser enforces `version == 1`
-and the port range, while `Content-Type: application/json` addresses the HTTP
-compatibility finding. The follow-up issue for the managed task 1.3.2 lifecycle
-is drafted, not created; that task must replace or fold the checkpoint-only
-guard and add deterministic cancellation and `SIGTERM` coverage during startup
-and in-flight stdout/stderr capture.
+is limited to this disposable harness, and its checkpoint-level signal and
+cleanup behaviour is now validated by deterministic tests: exit or signalling
+before readiness, in-flight stdout and stderr capture cancellation,
+graceful-shutdown failure propagation, and no surviving process-group
+descendant after `Drop` or `shutdown`. Managed-`Simulator` resource and stdin
+ownership, replacement or folding of the guard, and the full lifecycle contract
+remain task 1.3.2. This review pass removed the obsolete committed-key recovery
+wording and kept the readiness follow-up separate from the Octocrab header fix:
+the Bun parser enforces `version == 1` and the port range, while
+`Content-Type: application/json` addresses the HTTP compatibility finding. The
+follow-up issue for the managed task 1.3.2 lifecycle is now created (issue
+[#24](https://github.com/leynos/rentaneko/issues/24)); that task must replace
+or fold the checkpoint-only guard and add managed-`Simulator` lifecycle
+coverage.
 
 ## Context and orientation
 
