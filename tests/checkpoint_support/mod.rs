@@ -49,10 +49,17 @@ impl ThrowawayServerGuard {
             self.stderr_task.abort();
             return Ok(());
         };
-        terminate_process_group(child.id());
+        let process_group_id = child.id();
+        terminate_process_group(process_group_id);
         let graceful_shutdown = timeout(SHUTDOWN_TIMEOUT, child.wait()).await;
         let result = match graceful_shutdown {
-            Ok(Ok(status)) => exit_status_result(status),
+            Ok(Ok(status)) => {
+                // The direct child may exit cleanly while a descendant ignores
+                // SIGTERM. Close that checkpoint-only process group before
+                // reporting the direct child's status.
+                force_kill_process_group_id(process_group_id);
+                exit_status_result(status)
+            }
             Ok(Err(error)) => force_kill_and_reap(&mut child, error).await,
             Err(_) => force_kill_and_reap(&mut child, "graceful shutdown timed out").await,
         };
@@ -290,10 +297,18 @@ fn terminate_process_group(maybe_child_id: Option<u32>) {
 }
 
 #[cfg(unix)]
-fn force_kill_process_group(child: &Child) { signal_process_group(child.id(), Signal::SIGKILL); }
+fn force_kill_process_group_id(process_group_id: Option<u32>) {
+    signal_process_group(process_group_id, Signal::SIGKILL);
+}
+
+#[cfg(unix)]
+fn force_kill_process_group(child: &Child) { force_kill_process_group_id(child.id()); }
 
 #[cfg(not(unix))]
 fn force_kill_process_group(_child: &Child) {}
+
+#[cfg(not(unix))]
+fn force_kill_process_group_id(_process_group_id: Option<u32>) {}
 
 /// Maps a reaped child's exit status onto the shutdown result.
 ///

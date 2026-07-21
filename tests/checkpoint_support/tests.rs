@@ -152,9 +152,9 @@ async fn readiness_read_aborts_cleanly_while_in_flight() -> Result<()> {
         .await
         .expect("write partial noise");
     task.abort();
-    let joined = task.await;
+    let join_error = task.await.expect_err("readiness task must be cancelled");
     drop(writer);
-    verify_that!(joined.is_err(), eq(true))
+    verify_that!(join_error.is_cancelled(), eq(true))
 }
 
 // Aborting the stderr capture while it is awaiting more input terminates the
@@ -169,9 +169,9 @@ async fn stderr_capture_aborts_cleanly_while_in_flight() -> Result<()> {
         .await
         .expect("write stderr");
     task.abort();
-    let joined = task.await;
+    let join_error = task.await.expect_err("stderr task must be cancelled");
     drop(writer);
-    verify_that!(joined.is_err(), eq(true))
+    verify_that!(join_error.is_cancelled(), eq(true))
 }
 
 #[cfg(unix)]
@@ -264,15 +264,26 @@ async fn spawn_scripted_leader(script: &str) -> (Child, String) {
 // Backgrounds a grandchild in the leader's process group and reports its PID.
 #[cfg(unix)]
 const SCRIPT_GRANDCHILD: &str = "sleep 300 & printf '%s\\n' \"$!\"; wait\n";
-// Traps SIGTERM into a clean exit after backgrounding a grandchild whose PID it
-// reports, so graceful shutdown succeeds and the group SIGTERM removes the
-// grandchild.
+// Traps SIGTERM into a clean direct-child exit after a descendant has reported
+// that it is ignoring SIGTERM. Shutdown must still remove the whole group.
 #[cfg(unix)]
-const SCRIPT_CLEAN_ON_TERM: &str = "trap 'exit 0' TERM\nsleep 300 &\nprintf '%s\\n' \"$!\"\nwait\n";
-// Traps SIGTERM into a non-zero exit after printing a readiness marker, so
-// graceful shutdown observes a failure status.
+const SCRIPT_CLEAN_ON_TERM: &str = concat!(
+    "trap 'exit 0' TERM\n",
+    "sh -c 'trap \"\" TERM; printf \"%s\\n\" \"$$\"; exec sleep 300' &\n",
+    "wait\n",
+);
+// Traps SIGTERM into a non-zero exit after reporting a grandchild PID, so
+// graceful shutdown observes a failure status and leaves no descendant.
 #[cfg(unix)]
-const SCRIPT_FAIL_ON_TERM: &str = "trap 'exit 3' TERM\nprintf 'ready\\n'\nsleep 300 &\nwait\n";
+const SCRIPT_FAIL_ON_TERM: &str = "trap 'exit 3' TERM\nsleep 300 &\nprintf '%s\\n' \"$!\"\nwait\n";
+// Ignores SIGTERM in both the direct child and its descendant, forcing the
+// bounded shutdown timeout and process-group SIGKILL fallback.
+#[cfg(unix)]
+const SCRIPT_IGNORE_TERM: &str = concat!(
+    "trap '' TERM\n",
+    "sh -c 'trap \"\" TERM; printf \"%s\\n\" \"$$\"; exec sleep 300' &\n",
+    "wait\n",
+);
 
 #[cfg(unix)]
 async fn spawn_group_leader_with_grandchild() -> (Child, i32) {
@@ -305,8 +316,8 @@ async fn drop_terminates_the_process_group() -> Result<()> {
 }
 
 // Graceful shutdown signals the owned group: the trapped clean exit lets the
-// direct child exit 0 while the group SIGTERM removes the grandchild, leaving no
-// owned descendant behind.
+// direct child exit 0, then final group cleanup removes the resistant
+// descendant.
 #[cfg(unix)]
 #[tokio::test(flavor = "current_thread")]
 async fn shutdown_reaps_owned_process_group() -> Result<()> {
@@ -323,17 +334,51 @@ async fn shutdown_reaps_owned_process_group() -> Result<()> {
 #[cfg(unix)]
 #[tokio::test(flavor = "current_thread")]
 async fn shutdown_surfaces_runner_failure_status() -> Result<()> {
-    let (child, _marker) = spawn_scripted_leader(SCRIPT_FAIL_ON_TERM).await;
+    let (child, marker) = spawn_scripted_leader(SCRIPT_FAIL_ON_TERM).await;
+    let grandchild_pid: i32 = marker.trim().parse().expect("parse grandchild pid");
     let guard = guard_around(child);
 
     let error = guard
         .shutdown()
         .await
         .expect_err("non-zero graceful exit must surface");
-    verify_that!(error.to_string(), contains_substring("failure status"))
+    verify_that!(error.to_string(), contains_substring("failure status"))?;
+    verify_that!(wait_until_process_absent(grandchild_pid).await, eq(true))
 }
 
-// `kill(pid, None)` probes existence without delivering a signal.
+// A TERM-resistant process group exercises the bounded graceful-wait timeout;
+// the fallback must reap the direct child and remove its descendant.
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn shutdown_force_kills_after_graceful_timeout() -> Result<()> {
+    let (child, marker) = spawn_scripted_leader(SCRIPT_IGNORE_TERM).await;
+    let grandchild_pid: i32 = marker.trim().parse().expect("parse grandchild pid");
+    let guard = guard_around(child);
+
+    guard.shutdown().await.expect("forced shutdown succeeds");
+
+    verify_that!(wait_until_process_absent(grandchild_pid).await, eq(true))
+}
+
+// Reaping an already-reaped child is deterministic and safe: Tokio caches the
+// exit status, so the fallback returns `Ok` rather than hanging or panicking.
+// The reaping-error branch is not deterministically reachable.
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn force_kill_and_reap_is_idempotent_on_a_reaped_child() -> Result<()> {
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg("exit 0")
+        .spawn()
+        .expect("spawn short-lived child");
+    child.wait().await.expect("reap short-lived child");
+
+    force_kill_and_reap(&mut child, "test graceful failure")
+        .await
+        .expect("force kill and reap is safe on an already-reaped child");
+    verify_that!(child.id(), none())
+}
+
 #[cfg(unix)]
 fn process_is_running(target: Pid) -> bool { kill(target, None).is_ok() }
 

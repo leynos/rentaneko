@@ -195,6 +195,13 @@ Stop and escalate when any threshold is breached:
 
 ## Progress
 
+- [x] 2026-07-22: added deterministic, Bun-free checkpoint lifecycle tests for
+  readiness and stdout/stderr capture cancellation, graceful failure
+  propagation, bounded forced shutdown, and Unix process-group descendant
+  cleanup after graceful shutdown, forced shutdown, and `Drop`. The focused
+  checkpoint-support suite passed all 19 tests without warnings. Created
+  follow-up issue [#24](https://github.com/leynos/rentaneko/issues/24) for the
+  managed task 1.3.2 lifecycle contract.
 - [x] 2026-07-19: review pass cleaned the stale lifecycle wording, removed the
   committed-key recovery branch, and clarified that readiness-schema means the
   Bun parser contract (`version == 1` and `port` in `1..=65535`), with tests
@@ -388,8 +395,9 @@ Stop and escalate when any threshold is breached:
   rejects the request schema with `400`. The ignored checkpoint now passes for
   both installation `2000` (`FAKE_GITHUB_TOKEN`) and `9999` (typed `404`). A
   separate shutdown unit test would need to mock a real child, process group,
-  and reaping boundary; the ignored checkpoint covers that process behaviour,
-  while cancellation-interleaving coverage remains task 1.3.2. Evidence: current
+  and reaping boundary; the ignored checkpoint covered that process behaviour.
+  This statement was superseded on 2026-07-22 by deterministic checkpoint-level
+  lifecycle tests; the managed lifecycle contract remains task 1.3.2. Evidence:
   `/tmp/check-fmt-...review-followup.out`,
   `/tmp/markdownlint-...review-followup.out`,
   `/tmp/typecheck-...review-followup.out`, `/tmp/lint-...review-followup.out`,
@@ -409,8 +417,10 @@ Stop and escalate when any threshold is breached:
   checking the installed toolchain before editing Rust helpers.
 - Observation: the lifecycle note that said graceful shutdown and
   forced-termination were omitted is now stale; the later 2026-07-18 update
-  owns those behaviours, while managed lifecycle/cancellation and artefact
-  supersession still belong to roadmap task 1.3.2.
+  owns those behaviours. The 2026-07-22 tests now cover disposable checkpoint
+  cancellation and process-group cleanup deterministically; managed ownership,
+  stdin, replacement or folding, and artefact supersession still belong to
+  roadmap task 1.3.2.
 - Observation: the Bun readiness schema is enforced in the parser and covered
   by parser tests for `version == 1` plus the port range; that contract is
   distinct from the Octocrab `Content-Type` compatibility issue.
