@@ -234,6 +234,29 @@ mod lifecycle {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn drop_after_start_terminates_the_process_group() -> Result<()> {
+        let pid_dir = tempfile::tempdir().expect("temporary directory");
+        let pid_path = pid_dir.path().join("pid");
+        let simulator = Simulator::start_with(
+            fake_runner_with_pidfile(SCRIPT_FORCE_KILL, &pid_path),
+            None,
+            SEED_INSTALLATION,
+        )
+        .await
+        .expect("runner reports readiness");
+        let pid = poll_pid_file(&pid_path)
+            .await
+            .expect("grandchild pid recorded");
+
+        // Exercise the synchronous last-resort `Drop` path directly, with no
+        // `shutdown`/`teardown` call. `Drop` must SIGKILL the whole owned group
+        // so the grandchild dies too, not merely the direct runner child.
+        drop(simulator);
+
+        verify_that!(wait_until_process_absent(pid).await, eq(true))
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn shutdown_surfaces_runner_failure_status() -> Result<()> {
         let simulator =
             Simulator::start_with(fake_runner(SCRIPT_FAILURE_STATUS), None, SEED_INSTALLATION)
