@@ -242,23 +242,38 @@ impl Simulator {
     pub async fn start() -> Result<Self, RentanekoError>;
     pub fn base_uri(&self) -> &str;
     pub const fn installation_id(&self) -> u64;
+    pub async fn shutdown(self) -> Result<(), RentanekoError>;
+    // Deferred to roadmap task 1.4.2 (see §10).
     pub fn octocrab(&self) -> Result<octocrab::Octocrab, RentanekoError>;
 }
 ```
 
-The implementation should also own the child process and temporary directory,
-but those fields remain private. `Simulator::start` is the single lifecycle
-authority. Convenience types may compose `Simulator`, but they must not add a
-second process-start or teardown path.
+The implementation also owns the child process, its Unix process group where
+the platform supports it, the parent-side stdin pipe, the stdout and stderr
+capture tasks, the temporary configuration directory, the base URI, and the
+seeded installation ID; those fields remain private. `Simulator::start` is the
+single lifecycle authority. Convenience types may compose `Simulator`, but they
+must not add a second process-start or teardown path.
 
-`Drop` is synchronous, so it must not depend on `.await`. It should close the
-parent-side stdin pipe, send graceful termination when the process is still
-running, wait for a bounded interval, then kill and wait for a shorter bounded
-interval if the child remains alive. The drop path is best effort and should
-not inspect or kill unrelated processes. The exact wait durations are
-implementation constants, not design-level policy; they should be short enough
-to keep failed test teardown responsive and long enough to let Simulacat Core
-run its normal shutdown handler on typical CI runners.
+`Simulator::shutdown` is the bounded, asynchronous teardown authority. It
+closes the owned stdin pipe so the runner self-terminates on end-of-file,
+requests a graceful process-group stop, waits for a bounded interval,
+force-kills the whole owned process group when graceful shutdown fails or times
+out, reaps the direct child with a bounded fallback, joins the capture tasks,
+and surfaces any shutdown or reaping failure through
+`RentanekoError::ShutdownFailed`. It only ever signals the owned process group
+and never inspects or kills unrelated processes.
+
+`Drop` is synchronous, so it must not depend on `.await`. It is a best-effort
+last resort only: it closes the stdin pipe, force-terminates the owned process
+group (`SIGTERM` then `SIGKILL` where the platform supports it), starts a kill
+of the direct child, and aborts the capture tasks. `Drop` does not provide
+bounded graceful shutdown or asynchronous reaping, and it does not claim to;
+its sole guarantee is that no known process-group descendant keeps running once
+its best-effort fallback executes. The bounded wait durations used by
+`shutdown` are implementation constants, not design-level policy; they are
+short enough to keep failed test teardown responsive and long enough to let
+Simulacat Core run its normal shutdown handler on typical CI runners.
 
 An optional convenience wrapper can own the simulator and client together:
 

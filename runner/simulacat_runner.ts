@@ -1,20 +1,19 @@
-/** @file Throwaway Simulacat Core server for the 1.1.1 checkpoint. */
+/** @file Managed Simulacat Core runner owned by the Rentaneko `Simulator`. */
+import { readFileSync } from "node:fs";
 import { simulation, type InitialState } from "simulacat-core";
 
 const LISTEN_TIMEOUT_MS = 5_000;
 const SHUTDOWN_TIMEOUT_MS = 3_000;
 
-const initialState: InitialState = {
-  users: [],
-  installations: [{ id: 2000, account: "rentaneko", app_id: 1 }],
-  organizations: [{ login: "rentaneko" }],
-  repositories: [],
-  branches: [],
-  blobs: [],
-};
+interface RunnerConfig {
+  version: number;
+  initialState: InitialState;
+  bind: { host: string; port: number };
+}
 
 try {
-  const app = simulation({ initialState });
+  const config = readConfig();
+  const app = simulation({ initialState: config.initialState });
   let handle: Awaited<ReturnType<typeof app.listen>> | undefined;
   let isShuttingDown = false;
   let isClosing = false;
@@ -25,11 +24,11 @@ try {
     }
     isClosing = true;
     try {
-      await withTimeout(handle.ensureClose(), SHUTDOWN_TIMEOUT_MS, "checkpoint shutdown");
+      await withTimeout(handle.ensureClose(), SHUTDOWN_TIMEOUT_MS, "runner shutdown");
     } catch (error) {
-      // Surface a non-zero exit so the Rust harness treats the failed shutdown
-      // as an error rather than a clean stop.
-      process.stderr.write(`checkpoint shutdown failure: ${errorMessage(error)}\n`);
+      // Surface a non-zero exit so the Rust handle treats a failed shutdown as
+      // an error rather than a clean stop.
+      process.stderr.write(`runner shutdown failure: ${errorMessage(error)}\n`);
       process.exit(1);
     }
     process.exit(0);
@@ -45,9 +44,13 @@ try {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // Self-terminate when the parent closes the owned stdin pipe (EOF).
+  process.stdin.on("end", shutdown);
+  process.stdin.on("close", shutdown);
+  process.stdin.resume();
 
   handle = await withTimeout(
-    app.listen(0, "127.0.0.1"),
+    app.listen(config.bind.port, config.bind.host),
     LISTEN_TIMEOUT_MS,
     "Simulacat Core listen",
   );
@@ -69,6 +72,31 @@ try {
   process.exit(1);
 }
 
+function readConfig(): RunnerConfig {
+  const path = process.env.RENTANEKO_RUNNER_CONFIG;
+  if (!path) {
+    throw new Error("RENTANEKO_RUNNER_CONFIG environment variable is not set");
+  }
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as RunnerConfig;
+  validateConfig(parsed);
+  return parsed;
+}
+
+function validateConfig(config: RunnerConfig): void {
+  if (config.version !== 1) {
+    throw new Error(`unsupported config version: ${String(config.version)}`);
+  }
+  if (!config.initialState) {
+    throw new Error("config.initialState is required");
+  }
+  if (!config.bind || config.bind.host !== "127.0.0.1") {
+    throw new Error("config.bind.host must be 127.0.0.1");
+  }
+  if (config.bind.port !== 0) {
+    throw new Error("config.bind.port must be 0; the runner owns port selection");
+  }
+}
+
 function extractPort(address: unknown, fallbackPort: unknown): number {
   let port: unknown = fallbackPort;
   if (typeof address === "object" && address && "port" in address) {
@@ -85,7 +113,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Throwaway checkpoint support: extract only if a second timeout call-site survives 1.3.2.
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, operation: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {

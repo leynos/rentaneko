@@ -61,13 +61,15 @@ escalation, not a workaround.
   `RentanekoError` enum. Those are roadmap tasks 1.2.1, 1.2.2, 1.3.1, 1.3.2,
   and 1.4.x. This checkpoint may read only the readiness line it needs and must
   clearly mark its harness as throwaway.
-- Supersede-and-delete clause: every artefact added here is disposable. When
-  roadmap 1.3.1 lands the real config-reading runner and 1.3.2 lands the
-  `Simulator` handle, `tests/checkpoint_support/checkpoint_runner.ts`, the
-  throwaway guard, and the checkpoint's bespoke process handling must be
-  deleted or folded into the managed runner — not left to coexist as a second
-  Bun entrypoint. Record this trigger in `docs/developers-guide.md` so it is
-  not forgotten.
+- Supersede-and-delete clause (executed by roadmap task 1.3.2): every artefact
+  added here was disposable. Roadmap 1.3.1 landed the config-reading runner at
+  `runner/simulacat_runner.ts` and 1.3.2 landed the managed
+  `rentaneko::Simulator` handle, so `tests/checkpoint_support/mod.rs`,
+  `tests/checkpoint_support/tests.rs`,
+  `tests/checkpoint_support/checkpoint_runner.ts`, and the throwaway
+  `ThrowawayServerGuard` were deleted, and the compatibility proof was refolded
+  onto the managed handle in `tests/octocrab_compatibility.rs`. No second Bun
+  entrypoint remains.
 - Do not patch, rewrite, or post-process the simulator's token response in Rust.
   The token must arrive unmodified through real `octocrab`. If it does not,
   stop and record an upstream Simulacat Core task (this is the §5 / §12

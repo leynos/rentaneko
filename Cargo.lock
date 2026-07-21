@@ -1960,6 +1960,7 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 name = "rentaneko"
 version = "0.1.0"
 dependencies = [
+ "cap-std",
  "chrono",
  "googletest",
  "http",
@@ -1971,7 +1972,10 @@ dependencies = [
  "rstest-bdd",
  "rstest-bdd-macros",
  "secrecy",
+ "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "uselesskey",
 ]

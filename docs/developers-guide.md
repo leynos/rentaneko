@@ -46,9 +46,10 @@ container-backed checks in parallel.
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single
-lifecycle authority for the Bun child process, temporary configuration, base
-URI, and seeded installation ID. Higher-level helpers must compose that handle
-rather than spawning or tearing down another simulator process.
+lifecycle authority for the Bun child process, its Unix process group, the
+stdin pipe, the stdout and stderr capture tasks, the temporary configuration,
+the base URI, and the seeded installation ID. Higher-level helpers must compose
+that handle rather than spawning or tearing down another simulator process.
 
 `OctocrabFixture` is a thin convenience wrapper around `Simulator` and a real
 `octocrab::Octocrab` client. It exists to keep Podbot's first integration test
@@ -60,29 +61,47 @@ not assert Podbot's token-file permissions, temporary-file cleanup, or
 atomic-rename behaviour. Podbot owns those filesystem contracts and should test
 them directly.
 
-### Compatibility checkpoint
+### Simulator lifecycle
 
-The 1.1.1 compatibility checkpoint requires Bun `1.3.11` or newer and the
-checked-in `simulacat-core` dependency. Run the ignored proof with
+`Simulator::start` owns the managed Bun runner at `runner/simulacat_runner.ts`.
+The runner reads the versioned JSON configuration named by the
+`RENTANEKO_RUNNER_CONFIG` environment variable, binds `127.0.0.1:0`, emits the
+v1 `listening` readiness event with the selected port, closes on `SIGINT` or
+`SIGTERM`, and self-terminates when its stdin closes. `Simulator::start` writes
+that configuration into an owned temporary directory, spawns the runner in its
+own process group where the platform supports it, captures stdout and stderr
+into bounded buffers, and waits for readiness before returning.
+
+`Simulator::shutdown` is the bounded teardown authority. It closes the owned
+stdin pipe so the runner self-terminates on end-of-file, sends process-group
+`SIGTERM`, waits for a bounded interval, force-kills the whole owned process
+group and reaps the direct child when graceful shutdown fails or times out,
+joins the capture tasks, and surfaces any failure through
+`RentanekoError::ShutdownFailed`. `Drop` is best-effort last-resort cleanup
+only: it closes stdin and force-terminates the owned process group so no known
+descendant keeps running, but it does not provide bounded graceful shutdown or
+asynchronous reaping. Deterministic tests in `src/simulator/tests.rs` cover
+startup cancellation, in-flight stdout and stderr capture cancellation, the
+graceful-timeout force-kill path, and shutdown error propagation without
+relying on timing races. Process-group signalling is Unix-only; other targets
+fall back to signalling the direct child.
+
+### Compatibility proof
+
+The roadmap 1.1.1 compatibility proof is the drift tripwire, refolded onto the
+managed `Simulator`. It requires Bun `1.3.11` or newer and the checked-in
+`simulacat-core` dependency. Run the ignored proof with
 `cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` when
-you need to recheck the opt-in checkpoint.
+you need to recheck it.
 
 The Rust test uses the development-only `uselesskey` crate to generate a fresh
 RSA-2048+ RS256 signing key in memory at runtime. It converts the transient
 PKCS#8 representation directly into `jsonwebtoken::EncodingKey` for real
 Octocrab App JWT signing. Private-key material must never be committed,
 persisted, printed, or logged; production and public library APIs must not
-depend on `uselesskey`.
-
-The Bun runner installs `SIGINT` and `SIGTERM` handlers before listening. The
-Rust-side teardown path is separate: it sends process-group `SIGTERM`, waits
-for a bounded interval, then force-kills and reaps the child if it is still
-alive. `Drop` remains synchronous and best-effort last-resort cleanup. Stdin
-ownership and deterministic cancellation coverage belong to roadmap task 1.3.2,
-not this throwaway checkpoint.
-
-Delete this subsection once roadmap tasks 1.3.1 and 1.3.2 replace the throwaway
-runner with the owned Bun process and Rust process handle.
+depend on `uselesskey`. The App client must send
+`Content-Type: application/json`; otherwise Simulacat Core rejects the request
+before it evaluates the installation route.
 
 ## Tooling
 

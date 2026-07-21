@@ -1,6 +1,11 @@
-//! Opt-in compatibility checkpoint for real Octocrab against Simulacat Core.
-
-mod checkpoint_support;
+//! Opt-in compatibility proof for real Octocrab against the managed Simulator.
+//!
+//! This is the roadmap 1.1.1 drift tripwire, refolded onto the managed
+//! [`rentaneko::Simulator`] lifecycle. It starts a real Simulacat Core process
+//! through the owned Bun runner, builds an App-authenticated `octocrab` client
+//! against the reported base URI, and asserts the installation-token route is
+//! consumed without any Rust-side response rewriting. It requires Bun and is
+//! ignored by default.
 
 use std::io;
 
@@ -12,7 +17,8 @@ use octocrab::{
     models::{AppId, InstallationId},
 };
 use pretty_assertions::assert_eq;
-use rstest::{fixture, rstest};
+use rentaneko::Simulator;
+use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use secrecy::ExposeSecret;
 use uselesskey::{Factory, RsaFactoryExt, RsaSpec};
@@ -20,8 +26,8 @@ use uselesskey::{Factory, RsaFactoryExt, RsaSpec};
 const APP_ID: u64 = 1;
 
 #[derive(Default)]
-struct CheckpointState {
-    server: Option<checkpoint_support::ThrowawayServerGuard>,
+struct CompatibilityState {
+    simulator: Option<Simulator>,
     client: Option<Octocrab>,
     requested_installation_id: Option<u64>,
     token_result: Option<Result<String, octocrab::Error>>,
@@ -29,98 +35,60 @@ struct CheckpointState {
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-impl CheckpointState {
+impl CompatibilityState {
     async fn shutdown(self) -> Result<(), BoxError> {
-        if let Some(server) = self.server {
-            server.shutdown().await?;
+        if let Some(simulator) = self.simulator {
+            simulator.shutdown().await?;
         }
         Ok(())
     }
 }
 
 #[fixture]
-fn checkpoint_state() -> CheckpointState {
-    // `rstest-bdd` currently lint-warns on a single-expression fixture body, so
-    // keep the explicit empty state instead of delegating to `Default`.
-    CheckpointState {
-        server: None,
+fn compatibility_state() -> CompatibilityState {
+    // `rstest-bdd` lint-warns on a single-expression fixture body, so keep the
+    // explicit empty state instead of delegating to `Default`.
+    CompatibilityState {
+        simulator: None,
         client: None,
         requested_installation_id: None,
         token_result: None,
     }
 }
 
-#[rstest]
-#[case::valid_listening_line(
-    r#"{"version":1,"event":"listening","host":"127.0.0.1","port":49213}"#,
-    Some(49213)
-)]
-#[case::ignores_error_events(
-    r#"{"version":1,"event":"error","host":"127.0.0.1","port":49213}"#,
-    None
-)]
-#[case::ignores_non_json_noise("Simulacat Core started", None)]
-#[case::requires_loopback_host(
-    r#"{"version":1,"event":"listening","host":"0.0.0.0","port":49213}"#,
-    None
-)]
-#[case::requires_port(r#"{"version":1,"event":"listening","host":"127.0.0.1"}"#, None)]
-#[case::requires_version(r#"{"event":"listening","host":"127.0.0.1","port":49213}"#, None)]
-#[case::rejects_unsupported_version(
-    r#"{"version":2,"event":"listening","host":"127.0.0.1","port":49213}"#,
-    None
-)]
-#[case::rejects_zero_port(
-    r#"{"version":1,"event":"listening","host":"127.0.0.1","port":0}"#,
-    None
-)]
-#[case::rejects_oversized_port(
-    r#"{"version":1,"event":"listening","host":"127.0.0.1","port":70000}"#,
-    None
-)]
-fn parse_listening_port_returns_expected_port(
-    #[case] line: &str,
-    #[case] expected_port: Option<u16>,
-) {
-    assert_eq!(
-        checkpoint_support::parse_listening_port(line),
-        expected_port
-    );
-}
-
-#[given("a throwaway Simulacat Core seeded with installation 2000 for app 1")]
-async fn seeded_throwaway_simulacat_core(
-    checkpoint_state: &mut CheckpointState,
+#[given("a managed Simulacat Core seeded with installation 2000 for app 1")]
+async fn seeded_managed_simulacat_core(
+    compatibility_state: &mut CompatibilityState,
 ) -> Result<(), BoxError> {
-    checkpoint_state.server = Some(checkpoint_support::start_throwaway_server().await?);
+    compatibility_state.simulator = Some(Simulator::start().await?);
     Ok(())
 }
 
 #[given("an App-authenticated octocrab client pointed at the simulator")]
 fn app_authenticated_octocrab_client(
-    checkpoint_state: &mut CheckpointState,
+    compatibility_state: &mut CompatibilityState,
 ) -> Result<(), BoxError> {
-    let Some(server) = checkpoint_state.server.as_ref() else {
-        return Err(boxed_error("throwaway Simulacat Core was not started"));
+    let Some(simulator) = compatibility_state.simulator.as_ref() else {
+        return Err(boxed_error("managed Simulacat Core was not started"));
     };
-    checkpoint_state.client = Some(build_app_client(server.base_uri())?);
+    compatibility_state.client = Some(build_app_client(simulator.base_uri())?);
     Ok(())
 }
 
 #[when("the client requests an installation token for installation {installation_id:u64}")]
 async fn request_installation_token_for(
-    checkpoint_state: &mut CheckpointState,
+    compatibility_state: &mut CompatibilityState,
     installation_id: u64,
 ) -> Result<(), BoxError> {
-    request_installation_token(checkpoint_state, installation_id).await
+    request_installation_token(compatibility_state, installation_id).await
 }
 
 #[then("the token equals {expected_token:string}")]
 fn token_equals(
-    checkpoint_state: &CheckpointState,
+    compatibility_state: &CompatibilityState,
     expected_token: String,
 ) -> Result<(), BoxError> {
-    let Some(token_result) = checkpoint_state.token_result.as_ref() else {
+    let Some(token_result) = compatibility_state.token_result.as_ref() else {
         return Err(boxed_error("installation token was not requested"));
     };
     let actual_token = match token_result {
@@ -137,10 +105,10 @@ fn token_equals(
 
 #[then("octocrab reports that installation 9999 is unknown")]
 fn octocrab_reports_unknown_installation(
-    checkpoint_state: &CheckpointState,
+    compatibility_state: &CompatibilityState,
 ) -> Result<(), BoxError> {
-    assert_eq!(checkpoint_state.requested_installation_id, Some(9999));
-    let Some(token_result) = checkpoint_state.token_result.as_ref() else {
+    assert_eq!(compatibility_state.requested_installation_id, Some(9999));
+    let Some(token_result) = compatibility_state.token_result.as_ref() else {
         return Err(boxed_error("installation token was not requested"));
     };
 
@@ -161,14 +129,14 @@ fn octocrab_reports_unknown_installation(
 
 #[scenario(
     path = "tests/features/octocrab_compatibility.feature",
-    name = "Acquire an installation token from a throwaway Simulacat Core"
+    name = "Acquire an installation token from the managed Simulacat Core"
 )]
 #[ignore = "requires Bun and Simulacat Core; run with --run-ignored"]
 #[tokio::test(flavor = "current_thread")]
 async fn octocrab_compatibility_acquires_token(
-    checkpoint_state: CheckpointState,
+    compatibility_state: CompatibilityState,
 ) -> Result<(), BoxError> {
-    checkpoint_state.shutdown().await
+    compatibility_state.shutdown().await
 }
 
 #[scenario(
@@ -178,17 +146,17 @@ async fn octocrab_compatibility_acquires_token(
 #[ignore = "requires Bun and Simulacat Core; run with --run-ignored"]
 #[tokio::test(flavor = "current_thread")]
 async fn octocrab_compatibility_rejects_unknown_installation(
-    checkpoint_state: CheckpointState,
+    compatibility_state: CompatibilityState,
 ) -> Result<(), BoxError> {
-    checkpoint_state.shutdown().await
+    compatibility_state.shutdown().await
 }
 
 async fn request_installation_token(
-    checkpoint_state: &mut CheckpointState,
+    compatibility_state: &mut CompatibilityState,
     installation_id: u64,
 ) -> Result<(), BoxError> {
-    checkpoint_state.requested_installation_id = Some(installation_id);
-    let Some(client) = checkpoint_state.client.as_ref() else {
+    compatibility_state.requested_installation_id = Some(installation_id);
+    let Some(client) = compatibility_state.client.as_ref() else {
         return Err(boxed_error(
             "App-authenticated octocrab client was not configured",
         ));
@@ -201,7 +169,7 @@ async fn request_installation_token(
         Ok::<String, octocrab::Error>(token.expose_secret().to_owned())
     }
     .await;
-    checkpoint_state.token_result = Some(token_result);
+    compatibility_state.token_result = Some(token_result);
     Ok(())
 }
 

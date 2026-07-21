@@ -83,7 +83,7 @@ Simulacat manages from Python while closing the process-fixture sharp edges
 identified in the review. Its outcome informs error handling, temporary file
 ownership, and fixture sharing. See rentaneko-design.md §§3-4 and §13.
 
-- [ ] 1.3.1. Add the private Bun runner for Simulacat Core startup.
+- [x] 1.3.1. Add the private Bun runner for Simulacat Core startup.
   - Requires 1.2.1.
   - See rentaneko-design.md §§4, 7, and 8.
   - Read the v1 JSON config file, call `simulation({ initialState })`, bind
@@ -91,7 +91,7 @@ ownership, and fixture sharing. See rentaneko-design.md §§3-4 and §13.
     on `SIGINT` or `SIGTERM`, and self-terminate when stdin closes.
   - Success: the runner can be launched by hand with a minimal config and
     emits `{"version":1,"event":"listening","host":"127.0.0.1","port":N}`.
-- [ ] 1.3.2. Implement the Rust process handle.
+- [x] 1.3.2. Implement the Rust process handle.
   - Requires 1.2.2 and 1.3.1.
   - See rentaneko-design.md §§8, 9, and 13.
   - Own the child process, stdin pipe, temporary directory, base URI, and

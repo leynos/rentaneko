@@ -11,21 +11,36 @@ keywords = ["testing", "github", "mocks", "simulator"]
 categories = ["development-tools"]
 
 [dependencies]
+cap-std = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = [
+    "io-util",
+    "macros",
+    "process",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
+
+# Process-group signalling is Unix-only; other targets fall back to no-ops.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["process", "signal"] }
 
 [dev-dependencies]
 chrono = "0.4"
 googletest = "0.13"
 http = "1.4"
 jsonwebtoken = "10"
-nix = { version = "0.30", features = ["process", "signal"] }
 octocrab = "0.51.0"
 pretty_assertions = "1"
 rstest = "0.26"
 rstest-bdd = "0.5"
 rstest-bdd-macros = "0.5"
 secrecy = "0.10"
-serde_json = "1"
-tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "time"] }
 uselesskey = { version = "0.10.0", features = ["rsa"] }
 
 [lints.clippy]
