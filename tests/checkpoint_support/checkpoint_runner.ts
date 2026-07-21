@@ -57,9 +57,16 @@ try {
 
   const address = handle.server.address();
   const port = extractPort(address, handle.port);
-  process.stdout.write(
-    `${JSON.stringify({ version: 1, event: "listening", host: "127.0.0.1", port })}\n`,
-  );
+  // Re-check immediately before publishing: shutdown may have started while the
+  // address and port were being resolved, and a listening event must never be
+  // emitted for a server that is already closing.
+  if (isShuttingDown) {
+    await closeHandle();
+  } else {
+    process.stdout.write(
+      `${JSON.stringify({ version: 1, event: "listening", host: "127.0.0.1", port })}\n`,
+    );
+  }
 } catch (error) {
   const message = errorMessage(error);
   const stack = error instanceof Error ? error.stack : undefined;

@@ -13,6 +13,8 @@ use nix::{sys::signal::kill, unistd::Pid};
 #[cfg(unix)]
 use pretty_assertions::assert_eq;
 #[cfg(unix)]
+use rstest::rstest;
+#[cfg(unix)]
 use tokio::{
     io::{AsyncBufReadExt as _, BufReader},
     process::Command,
@@ -39,39 +41,36 @@ fn stderr_capture_retains_only_the_latest_output() -> Result<()> {
 }
 
 #[cfg(unix)]
-#[test]
-fn exit_status_result_accepts_clean_exit() -> Result<()> {
-    verify_that!(exit_status_result(ExitStatus::from_raw(0)), ok(anything()))
+#[rstest]
+#[case::clean_exit(0, Ok(()))]
+#[case::nonzero_exit(1 << 8, Err(Some("failure status")))]
+#[case::signal_termination(9, Err(None))]
+fn exit_status_result_maps_status(
+    #[case] raw_status: i32,
+    #[case] expected: std::result::Result<(), Option<&str>>,
+) -> Result<()> {
+    // Raw wait statuses: `0` is a clean exit, `1 << 8` a normal exit with code
+    // 1, and `9` termination by SIGKILL.
+    let result = exit_status_result(ExitStatus::from_raw(raw_status));
+    match expected {
+        Ok(()) => verify_that!(result, ok(anything())),
+        Err(None) => verify_that!(result, err(anything())),
+        Err(Some(substring)) => verify_that!(
+            result
+                .expect_err("non-success status must be an error")
+                .to_string(),
+            contains_substring(substring)
+        ),
+    }
 }
 
 #[cfg(unix)]
-#[test]
-fn exit_status_result_rejects_nonzero_exit() -> Result<()> {
-    // A raw wait status of `1 << 8` encodes a normal exit with code 1.
-    let error = exit_status_result(ExitStatus::from_raw(1 << 8))
-        .expect_err("non-zero exit must be an error");
-    verify_that!(error.to_string(), contains_substring("failure status"))
-}
-
-#[cfg(unix)]
-#[test]
-fn exit_status_result_rejects_signal_termination() -> Result<()> {
-    // A raw wait status of `9` encodes termination by SIGKILL.
-    verify_that!(exit_status_result(ExitStatus::from_raw(9)), err(anything()))
-}
-
-#[cfg(unix)]
-#[test]
-fn process_group_pid_negates_the_group_leader() {
-    let pid = process_group_pid(4321).expect("a small pid fits in i32");
+#[rstest]
+#[case::negates_group_leader(4321, Some(-4321))]
+#[case::rejects_overflow(u32::MAX, None)]
+fn process_group_pid_maps_ids(#[case] input: u32, #[case] expected: Option<i32>) {
     // A negative pid targets the whole process group in `kill(2)`.
-    assert_eq!(pid.as_raw(), -4321);
-}
-
-#[cfg(unix)]
-#[test]
-fn process_group_pid_rejects_overflowing_ids() -> Result<()> {
-    verify_that!(process_group_pid(u32::MAX), none())
+    assert_eq!(process_group_pid(input).map(Pid::as_raw), expected);
 }
 
 // Spawns a shell that backgrounds a grandchild in the same process group, then

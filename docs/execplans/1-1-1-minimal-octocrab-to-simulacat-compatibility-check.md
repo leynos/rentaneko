@@ -926,7 +926,7 @@ Feature: Octocrab consumes the Simulacat Core installation-token route
 
   Scenario: An unknown installation is rejected
     When the client requests an installation token for installation 9999
-    Then octocrab returns an error
+    Then octocrab reports that installation 9999 is unknown
 ```
 
 Quality criteria (what "done" means):

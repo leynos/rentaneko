@@ -64,8 +64,8 @@ them directly.
 
 The 1.1.1 compatibility checkpoint requires Bun `1.3.11` or newer and the
 checked-in `simulacat-core` dependency. Run the ignored proof with
-`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` when
-you need to recheck the opt-in checkpoint.
+`cargo nextest run --run-ignored all -E 'test(octocrab_compatibility)'` to
+recheck the opt-in checkpoint.
 
 The Rust test uses the development-only `uselesskey` crate to generate a fresh
 RSA-2048+ RS256 signing key in memory at runtime. It converts the transient
