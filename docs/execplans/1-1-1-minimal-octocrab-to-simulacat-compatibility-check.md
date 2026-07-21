@@ -202,6 +202,11 @@ Stop and escalate when any threshold is breached:
   checkpoint-support suite passed all 19 tests without warnings. Created
   follow-up issue [#24](https://github.com/leynos/rentaneko/issues/24) for the
   managed task 1.3.2 lifecycle contract.
+- [x] 2026-07-22: final `make check-fmt`, `make markdownlint`,
+  `make typecheck`, `make lint`, `make test`, and `make audit` gates passed.
+  The full suite reported 30 passed and 2 intentionally skipped; the audit
+  scanned 353 dependencies. `coderabbit review --agent` completed with zero
+  findings.
 - [x] 2026-07-19: review pass cleaned the stale lifecycle wording, removed the
   committed-key recovery branch, and clarified that readiness-schema means the
   Bun parser contract (`version == 1` and `port` in `1..=65535`), with tests
