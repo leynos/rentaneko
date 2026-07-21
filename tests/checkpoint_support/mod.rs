@@ -64,7 +64,11 @@ impl ThrowawayServerGuard {
 impl Drop for ThrowawayServerGuard {
     fn drop(&mut self) {
         if let Some(child) = self.child.as_mut() {
+            // Mirror the `force_kill_and_reap` fallback: after the graceful
+            // process-group SIGTERM, force-kill the whole owned group so
+            // descendants die too, then start the direct-child kill.
             terminate_process_group(child.id());
+            force_kill_process_group(child);
             drop(child.start_kill());
         }
         self.stderr_task.abort();

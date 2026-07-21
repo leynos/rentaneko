@@ -17,7 +17,7 @@ use rstest::rstest;
 #[cfg(unix)]
 use tokio::{
     io::{AsyncBufReadExt as _, BufReader},
-    process::Command,
+    process::{Child, Command},
     time::{Duration, Instant, sleep},
 };
 
@@ -98,6 +98,54 @@ async fn force_kill_and_reap_terminates_the_process_group() -> Result<()> {
     force_kill_and_reap(&mut child, "test-forced-shutdown")
         .await
         .expect("force kill and reap succeeds");
+
+    verify_that!(wait_until_process_absent(grandchild_pid).await, eq(true))
+}
+
+// Spawns a process-group leader that backgrounds a grandchild, returning the
+// owned child (with `kill_on_drop` so the direct child is reaped, matching the
+// real runner) and the grandchild PID it reported on stdout.
+#[cfg(unix)]
+async fn spawn_group_leader_with_grandchild() -> (Child, i32) {
+    let mut command = Command::new("sh");
+    command
+        .arg("-c")
+        .arg("sleep 300 & printf '%s\\n' \"$!\"; wait")
+        .stdout(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    set_process_group(&mut command);
+    let mut child = command.spawn().expect("spawn sh runner");
+    let stdout = child.stdout.take().expect("piped stdout");
+    let mut lines = BufReader::new(stdout).lines();
+    let pid_line = lines
+        .next_line()
+        .await
+        .expect("read grandchild pid line")
+        .expect("grandchild pid line present");
+    let grandchild_pid: i32 = pid_line.trim().parse().expect("parse grandchild pid");
+    (child, grandchild_pid)
+}
+
+// Wraps `child` in a `ThrowawayServerGuard` without real stderr capture; the
+// Drop-only path just needs a task handle to abort.
+#[cfg(unix)]
+fn guard_around(child: Child) -> super::ThrowawayServerGuard {
+    super::ThrowawayServerGuard {
+        child: Some(child),
+        stderr_task: tokio::spawn(async {}),
+        base_uri: String::new(),
+    }
+}
+
+// Dropping the guard WITHOUT `shutdown()` must terminate the whole owned process
+// group, including the backgrounded grandchild, not merely the direct child.
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn drop_terminates_the_process_group() -> Result<()> {
+    let (child, grandchild_pid) = spawn_group_leader_with_grandchild().await;
+    let guard = guard_around(child);
+
+    drop(guard);
 
     verify_that!(wait_until_process_absent(grandchild_pid).await, eq(true))
 }
