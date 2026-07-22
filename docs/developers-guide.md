@@ -77,9 +77,11 @@ depend on `uselesskey`.
 The Bun runner installs `SIGINT` and `SIGTERM` handlers before listening. The
 Rust-side teardown path is separate: it sends process-group `SIGTERM`, waits
 for a bounded interval, then force-kills and reaps the child if it is still
-alive. `Drop` remains synchronous and best-effort last-resort cleanup. Stdin
-ownership and deterministic cancellation coverage belong to roadmap task 1.3.2,
-not this throwaway checkpoint.
+alive. `Drop` remains synchronous and best-effort last-resort cleanup.
+Deterministic checkpoint tests cover readiness and stdout/stderr capture
+cancellation, shutdown, and Unix process-group cleanup. Only the managed
+`Simulator` lifecycle, stdin ownership, and related managed cancellation remain
+deferred to roadmap task 1.3.2.
 
 Delete this subsection once roadmap tasks 1.3.1 and 1.3.2 replace the throwaway
 runner with the owned Bun process and Rust process handle.

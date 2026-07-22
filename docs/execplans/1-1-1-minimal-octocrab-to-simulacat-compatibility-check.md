@@ -72,9 +72,9 @@ escalation, not a workaround.
   The token must arrive unmodified through real `octocrab`. If it does not,
   stop and record an upstream Simulacat Core task (this is the §5 / §12
   contract).
-- Keep `octocrab` pinned to the 0.51.x line to match Podbot's incubator
-  dependency, and ensure the lockfile resolves to exactly `0.51.0` (Podbot's
-  pin; rentaneko-design.md §10 requires the same minor). The checkpoint uses
+- Keep `octocrab` pinned to exactly `0.51.0` as this checkpoint's explicit
+  compatibility target. Podbot currently pins `0.54.0`; do not treat this
+  historical checkpoint version as its current dependency. The checkpoint uses
   App ID `1` and installation ID `2000` exactly (rentaneko-design.md §6).
 - Keep `make check-fmt`, `make lint`, and `make test` green for a contributor
   who does **not** have Bun or Simulacat Core installed. The Bun-dependent
@@ -207,6 +207,9 @@ Stop and escalate when any threshold is breached:
   The full suite reported 30 passed and 2 intentionally skipped; the audit
   scanned 353 dependencies. `coderabbit review --agent` completed with zero
   findings.
+- [x] 2026-07-22: synchronized lifecycle documentation with the completed
+  checkpoint tests and verified Podbot's current `octocrab` pin as `0.54.0`.
+  The checkpoint deliberately retains `0.51.0` as its explicit target.
 - [x] 2026-07-19: review pass cleaned the stale lifecycle wording, removed the
   committed-key recovery branch, and clarified that readiness-schema means the
   Bun parser contract (`version == 1` and `port` in `1..=65535`), with tests
@@ -426,6 +429,10 @@ Stop and escalate when any threshold is breached:
   cancellation and process-group cleanup deterministically; managed ownership,
   stdin, replacement or folding, and artefact supersession still belong to
   roadmap task 1.3.2.
+- Observation: Podbot advanced its `octocrab` pin to `0.54.0` after this
+  checkpoint selected `0.51.0`. Impact: describe `0.51.0` as the checkpoint's
+  explicit compatibility target, not Podbot's current pin; consumer alignment
+  remains later managed-fixture work.
 - Observation: the Bun readiness schema is enforced in the parser and covered
   by parser tests for `version == 1` plus the port range; that contract is
   distinct from the Octocrab `Content-Type` compatibility issue.
@@ -1059,11 +1066,12 @@ assert_eq!(token.expose_secret(), "FAKE_GITHUB_TOKEN");
 
 Add only a `[dev-dependencies]` table to `Cargo.toml`. Use caret requirements
 (repository policy). The lockfile must resolve `octocrab` to exactly `0.51.0`
-(Podbot's pin); if it cannot, or any other crate cannot resolve, escalate.
+as the explicit compatibility checkpoint target; Podbot currently pins
+`0.54.0`. If it or any other crate cannot resolve, escalate.
 
 ```toml
 [dev-dependencies]
-octocrab = "0.51.0"                                           # match Podbot's incubator line
+octocrab = "0.51.0"                                           # explicit compatibility target
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "io-util", "time"] }
 jsonwebtoken = "10"                                          # Octocrab does not re-export EncodingKey
 nix = { version = "0.30", features = ["process", "signal"] }   # process-group cleanup in the throwaway harness

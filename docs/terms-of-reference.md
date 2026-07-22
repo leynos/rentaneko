@@ -161,7 +161,8 @@ call, so the filesystem test does not hide a broken client boundary.
   `POST /app/installations/{installation_id}/access_tokens`.
 - Podbot's existing `OctocrabAppClient` and
   `acquire_installation_token_with_client` boundary.
-- `octocrab` 0.51.0 compatibility for Podbot's current dependency graph.
+- `octocrab` 0.51.0 as the explicit compatibility checkpoint target; Podbot
+  currently pins 0.54.0, which later integration work must revalidate.
 - `rstest` fixture usage in the consuming Rust test suite.
 
 ## 9. Deferred questions

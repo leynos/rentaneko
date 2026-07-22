@@ -67,7 +67,7 @@ selection are fixed while repositories come from the store.
 
 Podbot already exposes the right Rust port. `OctocrabAppClient` wraps a real
 `octocrab::Octocrab`, and `acquire_installation_token_with_client` accepts a
-client trait. Podbot pins `octocrab` 0.51.0 and uses `rstest` 0.26.1.
+client trait. Podbot currently pins `octocrab` 0.54.0 and uses `rstest` 0.26.1.
 
 GitHub documents `GET /app` as the authenticated App endpoint and
 `POST /app/installations/{installation_id}/access_tokens` as the installation
@@ -287,7 +287,8 @@ simulator state.
 Rentaneko should align its `octocrab` dependency with Podbot for the incubator
 phase. Returning an `octocrab::Octocrab` value across crate boundaries only
 works cleanly when the consumer and fixture resolve the same major and minor
-crate version. Podbot currently uses `octocrab` 0.51.0.
+crate version. Podbot currently uses `octocrab` 0.54.0; the completed
+compatibility checkpoint retains 0.51.0 as its explicit historical target.
 
 The fixture should generate an RSA-2048+ RS256 test key at runtime with
 `uselesskey`. The key must remain in memory and must not be logged or
