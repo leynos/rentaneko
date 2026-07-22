@@ -22,8 +22,7 @@
 - **Group by feature, not layer.** Colocate views, logic, fixtures, and helpers
   related to a domain concept rather than splitting by type.
 - **Use consistent spelling and grammar.** Comments must use en-GB-oxendict
-  ("-ize" / "-yse" / "-our") spelling and grammar, with the exception of
-  references to external APIs.
+  spelling and grammar, with the exception of references to external APIs.
 - **Illustrate with clear examples.** Function documentation must include clear
   examples demonstrating the usage and outcome of the function. Test
   documentation should omit examples where the example serves only to reiterate
@@ -327,8 +326,9 @@ project:
   ```
 
   Use the same command with `--check` to detect drift without rewriting the
-  tracked file. The separate consumer phrase check enforces corrections, such
-  as `hand-written` to `handwritten`, that Typos cannot match as whole phrases.
+  tracked file. The separate consumer phrase check enforces corrections that
+  Typos cannot match as whole phrases, such as replacing the hyphenated form
+  with `handwritten`.
 - Quoted APIs and identifiers retain upstream spelling. Put them in backticks
   or fenced code blocks, which the spelling gate ignores, rather than adding
   word-level exceptions.

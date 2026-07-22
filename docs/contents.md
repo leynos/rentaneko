@@ -23,6 +23,13 @@ documentation set.
   spelling, structure, Markdown, Architecture Decision Record (ADR), Request
   for Comments (RFC), and roadmap conventions used by this documentation set.
 
+## Execution plans
+
+- [Minimal Octocrab-to-Simulacat compatibility checkpoint (1.1.1)](execplans/1-1-1-minimal-octocrab-to-simulacat-compatibility-check.md)
+  records the roadmap task 1.1.1 checkpoint, proving real `octocrab` receives
+  `FAKE_GITHUB_TOKEN` and a typed `404` response from a throwaway Simulacat
+  Core process.
+
 ## Rust reference material
 
 - [Reliable testing in Rust via dependency injection](reliable-testing-in-rust-via-dependency-injection.md)

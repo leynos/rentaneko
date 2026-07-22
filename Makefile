@@ -6,6 +6,8 @@ SHELL := bash
 TARGET ?= librentaneko.rlib
 
 CARGO ?= cargo
+CARGO_AUDIT_DEFAULT_IGNORES ?= RUSTSEC-2023-0071 RUSTSEC-2024-0370
+CARGO_AUDIT_DEFAULT_IGNORE_PACKAGES ?= rsa proc-macro-error
 BUILD_JOBS ?=
 RUST_FLAGS ?=
 RUST_FLAGS := -D warnings $(RUST_FLAGS)
@@ -106,8 +108,16 @@ rust-audit: ## Audit the Rust workspace for known vulnerabilities
 	printf "Audit metadata phase: deriving workspace manifests\n"; \
 	$(CARGO) metadata --no-deps --format-version 1 | python3 -c 'import json, sys; metadata = json.load(sys.stdin); members = set(metadata["workspace_members"]); print(metadata["workspace_root"]); [print(package["manifest_path"]) for package in metadata["packages"] if package["id"] in members]' > "$$manifest_list"; \
 	workspace_root=$$(sed -n '1p' "$$manifest_list"); \
+	printf "Audit policy phase: checking default ignores are development-only\n"; \
+	production_tree=$$(cd "$$workspace_root" && $(CARGO) tree --workspace --all-features --edges normal,build --prefix none); \
+	for package in $(CARGO_AUDIT_DEFAULT_IGNORE_PACKAGES); do \
+		if printf '%s\n' "$$production_tree" | awk -v package="$$package" '$$1 == package { found = 1 } END { exit !found }'; then \
+			printf "Refusing default RustSec ignore: package %s is reachable through a normal or build dependency.\n" "$$package"; \
+			exit 1; \
+		fi; \
+	done; \
 	audit_flags=(); \
-	for advisory in $$CARGO_AUDIT_IGNORES; do \
+	for advisory in $(CARGO_AUDIT_DEFAULT_IGNORES) $$CARGO_AUDIT_IGNORES; do \
 		audit_flags+=(--ignore "$$advisory"); \
 	done; \
 	printf "Auditing Rust workspace %s\n" "$$workspace_root"; \

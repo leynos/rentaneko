@@ -28,22 +28,30 @@ walking skeleton. Its outcome decides whether Rentaneko can proceed to process
 lifecycle work or must first request Simulacat Core compatibility changes. See
 rentaneko-design.md §5 and adr-001-use-simulacat-core-for-octocrab-spike.md.
 
-- [ ] 1.1.1. Add the minimal Octocrab-to-Simulacat compatibility checkpoint.
+- [x] 1.1.1. Add the minimal Octocrab-to-Simulacat compatibility checkpoint.
   - See rentaneko-design.md §5.
   - Use a hand-started or throwaway Simulacat Core process, the minimum
     installation state, App ID `1`, installation ID `2000`, and real
     `octocrab` 0.51.0 App authentication.
-  - Success: `installation_token_with_buffer` returns `FAKE_GITHUB_TOKEN`
-    without Rentaneko patching the response.
-- [ ] 1.1.2. Record the exact upstream outcome of the checkpoint.
+  - Outcome: the opt-in `rstest-bdd` checkpoint and default quality gates pass.
+    The real installation-scoped client receives `FAKE_GITHUB_TOKEN` for
+    installation `2000` and a typed `404 Not Found` GitHub error for `9999`.
+    The required request header is `Content-Type: application/json`; without
+    it, Simulacat Core rejects the request before the route is evaluated.
+  - Audit status: `make audit` includes documented repo-owned ignores for the
+    test-only `rsa` / `jsonwebtoken` advisory (`RUSTSEC-2023-0071`) and the
+    existing `rstest-bdd-macros` `proc-macro-error` warning
+    (`RUSTSEC-2024-0370`). The AWS-LC JWT backend was evaluated for 1.1.1 but
+    failed deterministic compile gates in this environment.
+- [x] 1.1.2. Record the exact upstream outcome of the checkpoint.
   - Requires 1.1.1.
   - See rentaneko-design.md §12.
-  - If the checkpoint passes, document that no Simulacat Core runtime feature
-    is required for Podbot 3.3.1. If it fails, name the smallest Simulacat Core
-    route, payload, or authentication compatibility task before continuing.
-  - Success: the docs state whether the spike is blocked by upstream
-    compatibility and do not let Rentaneko compensate with a Rust-side token
-    payload fork.
+  - Outcome: no Simulacat Core payload or route change is required. The client
+    must send `Content-Type: application/json` for the existing endpoint's
+    request schema; then its token payload and `404` error response are
+    compatible with Octocrab.
+  - Success: the documented client configuration preserves the real response
+    and avoids a Rust-side token-payload fork.
 
 ### 1.2. Pin the Bun-to-Rust contracts
 
@@ -108,9 +116,10 @@ exports are needed now or can wait. See rentaneko-design.md §§6, 9, and 10.
 - [ ] 1.4.2. Build the App-authenticated `octocrab` factory.
   - Requires 1.1.1 and 1.4.1.
   - See rentaneko-design.md §10.
-  - Embed a test RSA key, configure `Octocrab::builder()` with the simulator
-    base URI and App ID `1`, and align the `octocrab` crate version with
-    Podbot's incubator dependency.
+  - Generate a runtime-only RSA-2048+ RS256 key with `uselesskey` without
+    logging or persisting it, convert it in memory, configure
+    `Octocrab::builder()` with the simulator base URI and App ID `1`, and align
+    the `octocrab` crate version with Podbot's incubator dependency.
   - Success: `installation_token_with_buffer` against installation `2000`
     returns `FAKE_GITHUB_TOKEN` through the managed runner.
 - [ ] 1.4.3. Add the narrow `OctocrabFixture` convenience type.

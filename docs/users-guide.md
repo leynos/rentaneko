@@ -27,8 +27,12 @@ The generated `Makefile` exposes these public targets:
 - `make build` builds the debug target.
 - `make release` builds the release target.
 - `make coverage` writes `lcov.info` using `cargo llvm-cov` and `lld`.
-- `make audit` derives the Rust workspace root with `cargo metadata` and runs
-  `cargo audit` once from that root.
+- `make audit` derives the Rust workspace root with `cargo metadata`, checks
+  that packages covered by the repository-owned default RustSec ignores are not
+  reachable through normal or build dependencies, fails that preflight before
+  auditing if any such package is reachable, and otherwise runs `cargo audit`
+  once from the workspace root with the documented default advisory ignores. The
+  [developer guide](developers-guide.md) lists the current default ignores.
 - `make markdownlint` checks Markdown files.
 - `make nixie` validates Mermaid diagrams.
 
