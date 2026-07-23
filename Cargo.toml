@@ -14,7 +14,7 @@ categories = ["development-tools"]
 
 [dev-dependencies]
 chrono = "0.4"
-googletest = "0.13"
+googletest = "0.14"
 http = "1.4"
 jsonwebtoken = "10"
 nix = { version = "0.30", features = ["process", "signal"] }
