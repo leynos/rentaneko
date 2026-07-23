@@ -18,7 +18,7 @@ googletest = "0.13"
 http = "1.4"
 jsonwebtoken = "10"
 nix = { version = "0.30", features = ["process", "signal"] }
-octocrab = "0.51.0"
+octocrab = "0.54.0"
 pretty_assertions = "1"
 rstest = "0.26"
 rstest-bdd = "0.5"
