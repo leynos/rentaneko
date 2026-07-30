@@ -15,11 +15,11 @@ jobs:
       BUILD_PROFILE: debug
       WHITAKER_INSTALLER_VERSION: '0.2.6'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@4977418856133491c6aa7407d40668744df21818
+        uses: leynos/shared-actions/.github/actions/setup-rust@19a7f5d1b8d5c1b2236c39720a5744492b3fc129
       - name: Install mold linker
         if: runner.os == 'Linux'
         run: |
@@ -31,14 +31,14 @@ jobs:
       - name: Format
         run: make check-fmt
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@f163ced3abde29b6cd0890bb8e9307c9483b5dc9
+        uses: DavidAnson/markdownlint-cli2-action@d36517c02f0ca87b17baeb4fabee83cd48490f38
         with:
           globs: |
             **/*.md
             !**/target/**
             !**/dist/**
       - name: Setup uv
-        uses: astral-sh/setup-uv@ca5ddd015e07666cb1f1340ad6171f5e7afffb3e
+        uses: astral-sh/setup-uv@094aa226ed0e8f079adf9b0803105ffdac7bb465
         with:
           python-version: '3.14'
       - name: Spelling
@@ -58,11 +58,11 @@ jobs:
         run: cargo binstall --no-confirm cargo-audit
       - name: Setup Python for audit manifest extraction
         if: github.actor != 'dependabot[bot]'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.x'
       - name: Cache Whitaker installer
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             ~/.cargo/bin/whitaker-installer
@@ -94,7 +94,7 @@ jobs:
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@d28e04c9ea359650a85d697d1ab3d0be0b5674e7
+        uses: leynos/shared-actions/.github/actions/generate-coverage@19a7f5d1b8d5c1b2236c39720a5744492b3fc129
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -C link-arg=-fuse-ld=lld
@@ -107,7 +107,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: ${{ env.CS_ACCESS_TOKEN }}
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@7da7c6d89033d13cbb1c64803d108ddca97e69c2
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@19a7f5d1b8d5c1b2236c39720a5744492b3fc129
         with:
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
