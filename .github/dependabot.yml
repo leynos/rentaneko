@@ -28,3 +28,20 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
+  - package-ecosystem: rust-toolchain
+    directory: /
+    labels:
+      - dependencies
+      - rust-toolchain
+    schedule:
+      interval: weekly
+  - package-ecosystem: bun
+    directory: /
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - bun
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7

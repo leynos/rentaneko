@@ -13,6 +13,13 @@ accepted = []
 [patterns]
 # Official names: Azure Architecture Center and GitHub Flavored Markdown.
 ignore = [
+  # "mold" names the linker (https://github.com/rui314/mold) in these
+  # contexts only; the mould correction stays active elsewhere.
+  "-fuse-ld=mold",
+  "mold linker",
+  "Cranelift \\+ mold",
+  "Cranelift and mold",
+  "`mold`",
     "Azure Architecture\\s+Center\\s+\\|\\s+Microsoft Learn",
     "GitHub\\s+Flavored\\s+Markdown",
 ]
