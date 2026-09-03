@@ -18,7 +18,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@f4764bea8d813b1a8f7ebc37a44907d3c3b1e0e4
+        uses: leynos/shared-actions/.github/actions/setup-rust@bffacaf91d3f3515110679a30fbf6dc781ddc549
       - name: Install act
         run: |
           curl -fsSL "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" |
