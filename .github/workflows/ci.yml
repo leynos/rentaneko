@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@f4764bea8d813b1a8f7ebc37a44907d3c3b1e0e4
+        uses: leynos/shared-actions/.github/actions/setup-rust@bffacaf91d3f3515110679a30fbf6dc781ddc549
       - name: Install mold linker
         if: runner.os == 'Linux'
         run: |
@@ -31,14 +31,14 @@ jobs:
       - name: Format
         run: make check-fmt
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@84611f6fdd14490f100dd3f9fc9df32c24ccbeb6
+        uses: DavidAnson/markdownlint-cli2-action@8dbb459c40cdaf632a65d29e6e0a8053f42224a6
         with:
           globs: |
             **/*.md
             !**/target/**
             !**/dist/**
       - name: Setup uv
-        uses: astral-sh/setup-uv@d08d816a1ea176d61a318eff45abd3dffef415b1
+        uses: astral-sh/setup-uv@e105c8fb1d7b13074b851babdaef4185243c6a07
         with:
           python-version: '3.14'
       - name: Spelling
@@ -94,7 +94,7 @@ jobs:
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@f4764bea8d813b1a8f7ebc37a44907d3c3b1e0e4
+        uses: leynos/shared-actions/.github/actions/generate-coverage@bffacaf91d3f3515110679a30fbf6dc781ddc549
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -C link-arg=-fuse-ld=lld
@@ -107,7 +107,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: ${{ env.CS_ACCESS_TOKEN }}
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@f4764bea8d813b1a8f7ebc37a44907d3c3b1e0e4
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@bffacaf91d3f3515110679a30fbf6dc781ddc549
         with:
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
