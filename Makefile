@@ -20,6 +20,14 @@ TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,tes
 COVERAGE_LINKER_FLAGS ?= -fuse-ld=lld
 COVERAGE_RUST_FLAGS ?= $(RUST_FLAGS) -C link-arg=$(COVERAGE_LINKER_FLAGS)
 MDLINT ?= markdownlint-cli2
+# `make fmt` and `make check-fmt` call mdtablefix directly. `--git` selects the
+# Markdown files Git tracks and `--include-untracked` adds the untracked files
+# Git does not ignore, so a new document is formatted before it is staged.
+# Both modes need mdtablefix 0.6.0 or later; CI pins the version at the
+# install-mdtablefix step.
+MDTABLEFIX ?= mdtablefix
+MDTABLEFIX_SELECT = --git --include-untracked
+MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 NIXIE ?= nixie
 WHITAKER ?= whitaker
 UV ?= uv
@@ -70,10 +78,12 @@ typecheck: ## Type-check without building
 
 fmt: ## Format Rust and Markdown sources
 	$(CARGO) +nightly fmt --all
-	mdformat-all
+	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+	$(MDLINT) --fix "**/*.md"
 
 check-fmt: ## Verify formatting
 	$(CARGO) fmt --all -- --check
+	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 
 markdownlint: spelling ## Lint Markdown files and enforce spelling
 	find . -type f -name '*.md' -not -path './target/*' \
