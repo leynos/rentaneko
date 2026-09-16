@@ -11,10 +11,9 @@ accepted = []
 [words.corrections]
 
 [patterns]
-# Official names: Azure Architecture Center and GitHub Flavored Markdown.
 ignore = [
-    "Azure Architecture\\s+Center\\s+\\|\\s+Microsoft Learn",
-    "GitHub\\s+Flavored\\s+Markdown",
+    # Inline code spans are masked; the shared dictionary does not mask them yet.
+    '`[^`\n]+`',
 ]
 
 [files]
