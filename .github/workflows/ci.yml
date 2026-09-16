@@ -28,15 +28,19 @@ jobs:
           # mold accelerates dev builds; coverage uses lld for llvm-tools compatibility.
           sudo apt-get update \
             && sudo apt-get install --yes --no-install-recommends clang lld mold
+      - name: Install mdtablefix
+        # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
+        # first release with `--check` and `--git`.
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
+        with:
+          version: "0.6.0"
+
       - name: Format
         run: make check-fmt
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@de53322626a616f28481492702f0e28ae763b7d1
         with:
-          globs: |
-            **/*.md
-            !**/target/**
-            !**/dist/**
+          globs: '**/*.md'
       - name: Setup uv
         uses: astral-sh/setup-uv@421feb646df5262e7dd93bc54161edfa30372417
         with:
