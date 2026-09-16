@@ -5,29 +5,23 @@ project.
 
 ## Spelling policy
 
-Run `make spelling` to enforce en-GB-oxendict prose spelling. The target checks
-`typos.toml` for drift, runs the consumer phrase scanner, then runs the pinned
-Typos release over tracked Markdown. The generated configuration combines the
-shared estate dictionary with the narrow `typos.local.toml` overlay; never edit
-generated entries by hand.
+Run the spelling gate with:
 
-The configuration builder is pinned to commit
-`d6da92f02240a79a945c835f69bdd08a888da1d0`. Regenerate the configuration with:
-
-```sh
-TYPOS_CONFIG_BUILDER_COMMIT=d6da92f02240a79a945c835f69bdd08a888da1d0
-uvx --python 3.14 \
-  --from "git+https://github.com/leynos/typos-config-builder.git@${TYPOS_CONFIG_BUILDER_COMMIT}" \
-  typos-config-builder
+```bash
+make spelling
 ```
 
-Use the same command with `--check` in quality gates. The builder refreshes the
-untracked `.typos-oxendict-base.toml` only when the authority is newer and can
-reuse a valid cache when the authority is unavailable.
+The tracked `typos.toml` is regenerated on every run from the live shared
+dictionary and the repository-specific `typos.local.toml` overlay. Never edit
+generated entries by hand; add only narrow repository terminology to the
+overlay. Because the dictionary is live, `typos.toml` must never be drift
+checked in continuous integration.
 
-Typos splits hyphenated phrases into separate words. The consumer-owned
-`scripts/typos_rollout_check.py` therefore checks phrase corrections without
-duplicating the builder's validation, cache, merge or rendering behaviour.
+The pinned `typos-config-builder` release refreshes the estate dictionary into
+an untracked local cache only when the authoritative copy is newer. A valid
+cache remains usable when the network is unavailable. The gate also enforces
+the shared phrase corrections that Typos cannot match as whole phrases, because
+Typos splits hyphenated phrases into separate words.
 
 ## Local Workflow
 
