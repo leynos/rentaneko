@@ -16,7 +16,6 @@ compact and omits build output such as `target/`.
 ├── .github/
 │   ├── dependabot.yml
 │   └── workflows/
-│       ├── act-validation.yml
 │       ├── ci.yml
 
 ├── docs/
@@ -51,8 +50,6 @@ compact and omits build output such as `target/`.
 - `.cargo/config.toml`: Configures Cargo defaults for local development,
   including Linux linker and code-generation settings.
 - `.github/dependabot.yml`: Configures automated dependency update checks.
-- `.github/workflows/act-validation.yml`: Runs the generated workflow
-  validation through `act` separately from main CI.
 - `.github/workflows/ci.yml`: Runs the generated project's continuous
   integration checks.
 

@@ -13,6 +13,7 @@ categories = ["development-tools"]
 [dependencies]
 
 [dev-dependencies]
+cap-std = "3.4.5"
 chrono = "0.4"
 googletest = "0.14"
 http = "1.4"

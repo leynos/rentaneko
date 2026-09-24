@@ -107,6 +107,13 @@ jobs:
         with:
           output-path: lcov.info
           format: lcov
+      # The doctests are the only part of `make test` the coverage step does
+      # not run. The flags are the ones `make test` gives its doctest line.
+      # tests/workflow_suite_contract.rs holds the split.
+      - name: Run doctests
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test --doc --workspace --all-features
       - name: Upload coverage data to CodeScene
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
