@@ -32,10 +32,15 @@ available. `make audit` derives the Rust workspace root with `cargo metadata`,
 logs workspace member manifests, and runs `cargo audit` once from the workspace
 root. `make coverage` uses `cargo llvm-cov` with `lld`.
 
-GitHub Actions Act validation lives in `.github/workflows/act-validation.yml`.
-The main `.github/workflows/ci.yml` workflow deliberately does not run
-`make test WITH_ACT=1`; the separate Act workflow runs those slower
-container-backed checks in parallel.
+The test suite runs once per pull request, in `ci.yml`'s coverage step. That
+step runs the same tests `make test` runs except the doctests, which
+`build-test` runs in a step of its own with
+`cargo test --doc --workspace --all-features`. The repository used to carry an
+`act-validation.yml` workflow that ran `make test WITH_ACT=1`, but nothing reads
+`WITH_ACT` and no test is gated on Act, so that workflow ran the whole suite a
+second time and was removed. The crate declares no features, so `make test`'s
+`--all-features` selects the same tests as the coverage run's default.
+`tests/workflow_suite_contract.rs` holds the split.
 
 ## Prototype API Boundaries
 
