@@ -1973,6 +1973,7 @@ dependencies = [
  "secrecy",
  "serde_json",
  "tokio",
+ "toml",
  "uselesskey",
 ]
 
