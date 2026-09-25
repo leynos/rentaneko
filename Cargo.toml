@@ -22,7 +22,7 @@ nix = { version = "0.31", features = ["process", "signal"] }
 octocrab = "0.54.0"
 pretty_assertions = "1"
 rstest = "0.27"
-rstest-bdd = "0.5"
+rstest-bdd = "0.6"
 rstest-bdd-macros = "0.5"
 secrecy = "0.10"
 serde_json = "1"
