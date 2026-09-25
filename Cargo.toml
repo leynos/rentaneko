@@ -26,7 +26,7 @@ rstest-bdd = "0.5"
 rstest-bdd-macros = "0.5"
 secrecy = "0.10"
 serde_json = "1"
-toml = "0.5.11"
+toml = "1.1.3"
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "time"] }
 uselesskey = { version = "0.10.0", features = ["rsa"] }
 
