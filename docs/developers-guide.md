@@ -87,10 +87,14 @@ runner with the owned Bun process and Rust process handle.
 
 ## Tooling
 
-Development builds use Cranelift for debug code generation. On Linux targets,
-`.cargo/config.toml` configures clang to link with `mold` so debug builds link
-quickly. Coverage generation uses `lld` because LLVM coverage tooling expects
-LLVM-compatible linker behaviour.
+Development builds use Cranelift for debug code generation. Every `rustflags`
+source in `.cargo/config.toml` enables the parallel `rustc` frontend with
+`-Zthreads=8`, and on Linux targets it also configures clang to link with
+`mold` so debug builds link quickly. Cargo applies one `rustflags` source and
+an assigned `RUSTFLAGS` replaces them all, so the Makefile restates both flags
+as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`. Coverage
+generation uses `lld` because LLVM coverage tooling expects LLVM-compatible
+linker behaviour.
 
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
 full generated workflow locally on Linux.

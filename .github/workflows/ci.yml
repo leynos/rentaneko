@@ -112,7 +112,7 @@ jobs:
       # tests/workflow_suite_contract.rs holds the split.
       - name: Run doctests
         env:
-          RUSTFLAGS: -D warnings
+          RUSTFLAGS: -D warnings -Zthreads=8 -Clink-arg=-fuse-ld=mold
         run: cargo test --doc --workspace --all-features
       - name: Upload coverage data to CodeScene
         env:
