@@ -92,9 +92,11 @@ source in `.cargo/config.toml` enables the parallel `rustc` frontend with
 `-Zthreads=8`, and on Linux targets it also configures clang to link with
 `mold` so debug builds link quickly. Cargo applies one `rustflags` source and
 an assigned `RUSTFLAGS` replaces them all, so the Makefile restates both flags
-as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`. Coverage
-generation uses `lld` because LLVM coverage tooling expects LLVM-compatible
-linker behaviour.
+as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`. Release builds
+assign an empty inherited `RUSTFLAGS` and coverage assigns its own, so neither
+takes the standard flags. `tests/build_standard_contract.rs` holds the
+configuration sources and those recipes to this. Coverage generation uses `lld`
+because LLVM coverage tooling expects LLVM-compatible linker behaviour.
 
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
 full generated workflow locally on Linux.
