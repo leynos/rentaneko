@@ -42,6 +42,18 @@ second time and was removed. The crate declares no features, so `make test`'s
 `--all-features` selects the same tests as the coverage run's default.
 `tests/workflow_suite_contract.rs` holds the split.
 
+The contract reads workflows through the readers in
+`tests/workflow_suite/reading.rs` (`Command`, `Workflow`, `Job`, `Step` and
+`Manifest`) and `tests/workflow_suite/shell.rs`, which splits a command the way
+the shell does and decides whether it runs the suite. The readers belong to
+`tests/workflow_suite_contract.rs` alone: no other test calls them, and no
+production code depends on them. Callers ask a value what it holds (a job for
+its steps, a step for its condition, a command whether it runs the suite) and
+pass the Makefile's default goal in, so a bare `make` counts as a suite run
+only where that goal runs the suite. Extend the readers by adding a spelling
+case to the contract, and prove it with a mutation of `ci.yml` that the
+previous reader missed.
+
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single
