@@ -588,16 +588,51 @@ const fn skip_reason(probe: &MakeProbe) -> Option<&'static str> {
     }
 }
 
-/// Returns `true` where the make-backed tests must skip, after writing the
-/// reason to stderr so it is visible in a run with `--nocapture` (`eprintln!`
-/// is denied here, so the write goes through `std::io::stderr()`).
+/// Reports a skip to `out` and returns `true` where the version `make` gave
+/// means the make-backed tests must skip; returns `false`, writing nothing,
+/// where it is GNU make. The write goes to `out` so a test can capture it.
 #[cfg(target_os = "linux")]
-fn skips_without_gnu_make() -> bool {
-    let Some(reason) = skip_reason(&classify_make(make_version())) else {
+fn skip_unless_gnu(version: std::io::Result<String>, out: &mut impl std::io::Write) -> bool {
+    let Some(reason) = skip_reason(&classify_make(version)) else {
         return false;
     };
-    std::io::Write::write_all(&mut std::io::stderr(), reason.as_bytes()).ok();
+    out.write_all(reason.as_bytes()).ok();
     true
+}
+
+/// Returns `true` where the make-backed tests must skip, after writing the
+/// reason to stderr so it is visible in a run with `--nocapture` (`eprintln!`
+/// is denied here, so the write goes through `std::io::stderr()`). It only
+/// joins the probe to the decision; each half is tested on its own.
+#[cfg(target_os = "linux")]
+fn skips_without_gnu_make() -> bool { skip_unless_gnu(make_version(), &mut std::io::stderr()) }
+
+/// The skip decision and its report agree for every way `make --version` can
+/// answer: it skips and says why, or it runs and says nothing.
+#[cfg(target_os = "linux")]
+#[rstest]
+#[case::gnu(Ok("GNU Make 4.4.1\n".to_owned()), false, "")]
+#[case::bsd(
+    Ok("bmake 20240101\n".to_owned()),
+    true,
+    "skipped: make is not GNU make, so the reader cannot be pinned to it\n"
+)]
+#[case::missing(
+    Err(std::io::ErrorKind::NotFound.into()),
+    true,
+    "skipped: make could not be run, so the reader cannot be pinned to it\n"
+)]
+fn the_skip_decision_and_report_agree(
+    #[case] version: std::io::Result<String>,
+    #[case] skips: bool,
+    #[case] written: &str,
+) {
+    let mut out = Vec::new();
+    assert_eq!(skip_unless_gnu(version, &mut out), skips);
+    assert_eq!(
+        String::from_utf8(out).expect("the report is UTF-8"),
+        written
+    );
 }
 
 /// The skip messages are user-visible and stable, so they are held exactly,
