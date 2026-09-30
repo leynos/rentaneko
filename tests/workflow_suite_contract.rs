@@ -338,6 +338,7 @@ fn a_bare_make_runs_the_default_goal(#[case] goal: &str, #[case] expected: bool)
 #[case::conditional_then_set(".DEFAULT_GOAL ?= second\n.DEFAULT_GOAL := first\nbuild:\n", "first")]
 #[case::a_later_change_to_test(".DEFAULT_GOAL := build\nlint:\n.DEFAULT_GOAL := test\n", "test")]
 #[case::an_empty_value_clears_it(".DEFAULT_GOAL := first\n.DEFAULT_GOAL :=\nbuild:\n", "build")]
+#[case::an_empty_append_keeps_it(".DEFAULT_GOAL := first\n.DEFAULT_GOAL +=\nbuild:\n", "first")]
 #[case::several_words_are_refused(
     ".DEFAULT_GOAL := first\n.DEFAULT_GOAL += second\nbuild:\n",
     "build"
@@ -599,6 +600,23 @@ fn skips_without_gnu_make() -> bool {
     true
 }
 
+/// The skip messages are user-visible and stable, so they are held exactly,
+/// version numbers and probe details aside.
+#[cfg(target_os = "linux")]
+#[rstest]
+#[case::absent(
+    MakeProbe::Absent,
+    Some("skipped: make could not be run, so the reader cannot be pinned to it\n")
+)]
+#[case::not_gnu(
+    MakeProbe::NotGnu,
+    Some("skipped: make is not GNU make, so the reader cannot be pinned to it\n")
+)]
+#[case::gnu(MakeProbe::Gnu, None)]
+fn the_skip_messages_are_stable(#[case] probe: MakeProbe, #[case] expected: Option<&str>) {
+    assert_eq!(skip_reason(&probe), expected);
+}
+
 /// Each way `make --version` can answer selects the skip or the run.
 #[cfg(target_os = "linux")]
 #[rstest]
@@ -634,6 +652,9 @@ fn make_is_classified_from_its_version(
 #[case::a_later_change_to_test(".DEFAULT_GOAL := build\nbuild:\ntest:\n.DEFAULT_GOAL := test\n")]
 #[case::an_empty_value_clears_it(".DEFAULT_GOAL := first\n.DEFAULT_GOAL :=\nbuild:\nfirst:\n")]
 #[case::appending_to_nothing(".DEFAULT_GOAL += test\nbuild:\ntest:\n")]
+#[case::an_empty_append_keeps_the_value(
+    ".DEFAULT_GOAL := first\n.DEFAULT_GOAL +=\nbuild:\nfirst:\n"
+)]
 #[case::comments_are_skipped("# build: not a rule\nrun:\n")]
 #[case::special_targets_are_skipped(".PHONY: a\n.SUFFIXES:\nrun:\n")]
 #[case::recipe_text_is_not_an_assignment("first:\n\t@: .DEFAULT_GOAL = test\nsecond:\n")]

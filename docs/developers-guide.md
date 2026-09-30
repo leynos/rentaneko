@@ -60,13 +60,13 @@ reads that goal from the Makefile (`default_goal_of` in
 in order, as GNU make does (manual, "Other Special Variables"). `=` and `:=`
 replace the value, so the last one wins. `?=` changes nothing, because make
 defines `.DEFAULT_GOAL` itself, empty, before it reads a makefile. `+=` appends
-a word, and an empty value clears it. A value of several words, which make
-refuses, is not read, and the reader falls back to the first rule that is not a
-special or pattern target. A tab-indented line is recipe text, not an
-assignment. The reader keeps each right-hand side as written and does not
-expand variable references, so `.DEFAULT_GOAL = $(GOAL)` reads as `$(GOAL)`
-where make would expand it; the fixtures that pin the reader to make use
-literal goals.
+a word, and an empty `+=` keeps the current value. An empty `=` or `:=`
+assignment clears the value. A value of several words, which make refuses, is
+not read, and the reader falls back to the first rule that is not a special or
+pattern target. A tab-indented line is recipe text, not an assignment. The
+reader keeps each right-hand side as written and does not expand variable
+references, so `.DEFAULT_GOAL = $(GOAL)` reads as `$(GOAL)` where make would
+expand it; the fixtures that pin the reader to make use literal goals.
 
 `the_reader_agrees_with_gnu_make` pins this to make itself and not to a reading
 of its manual. It runs `make -f - -pn` on each fixture and compares the goal
