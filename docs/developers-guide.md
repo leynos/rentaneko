@@ -68,9 +68,9 @@ assignment.
 `the_reader_agrees_with_gnu_make` pins this to make itself and not to a reading
 of its manual. It runs `make -f - -pn` on each fixture and compares the goal
 make settles on (the `.DEFAULT_GOAL` line of the variable database) with the
-reader's. The test is compiled on Linux only and needs GNU make on `PATH`. A
-Linux host without it fails the test where it calls `make` rather than skipping
-it, so install make before running `make test` there.
+reader's. The test is compiled on Linux only. It needs GNU make on `PATH` and
+skips, printing the reason, on a host where `make` is absent or is not GNU
+make. CI runs it on Linux, where GNU make is the make in use.
 
 ## Prototype API Boundaries
 

@@ -540,6 +540,27 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
     }))
 }
 
+/// Returns whether the `make` on `PATH` is GNU make, saying why not on stderr
+/// when it is not, so a host without it skips the make-backed tests visibly
+/// instead of failing on a missing binary.
+#[cfg(target_os = "linux")]
+fn gnu_make_is_available() -> bool {
+    let is_gnu = std::process::Command::new("make")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).contains("GNU Make"));
+    if !is_gnu {
+        // Written to stderr directly: the reason must be visible in a run
+        // with `--nocapture`, and `eprintln!` is denied here.
+        std::io::Write::write_all(
+            &mut std::io::stderr(),
+            b"skipped: GNU make is not on PATH, so the reader cannot be pinned to it\n",
+        )
+        .ok();
+    }
+    is_gnu
+}
+
 /// The reader agrees with GNU make on every Makefile it can be run on, so the
 /// behaviour is pinned to make and not to anyone's reading of its manual.
 #[cfg(target_os = "linux")]
@@ -562,6 +583,9 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
 #[case::special_targets_are_skipped(".PHONY: a\n.SUFFIXES:\nrun:\n")]
 #[case::recipe_text_is_not_an_assignment("first:\n\t@: .DEFAULT_GOAL = test\nsecond:\n")]
 fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
+    if !gnu_make_is_available() {
+        return;
+    }
     let by_make = make_default_goal(makefile)
         .expect("make must run")
         .expect("make must accept the fixture");
@@ -573,6 +597,9 @@ fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
 #[cfg(target_os = "linux")]
 #[test]
 fn make_refuses_several_words_and_the_reader_does_not_read_them() {
+    if !gnu_make_is_available() {
+        return;
+    }
     let makefile = ".DEFAULT_GOAL := first\n.DEFAULT_GOAL += second\nbuild:\nfirst:\nsecond:\n";
     assert_eq!(make_default_goal(makefile).expect("make must run"), None);
     assert_eq!(default_goal_of(makefile), "build");
