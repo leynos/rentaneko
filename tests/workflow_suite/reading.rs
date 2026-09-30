@@ -1,42 +1,89 @@
 //! Readers for the suite-once contract: shell commands, workflow jobs and
-//! steps, and manifest features, all read textually or as TOML.
+//! steps, and manifest features, read textually or as TOML.
 //!
 //! Kept apart from `workflow_suite_contract.rs` so each file stays under the
-//! repository's 400-line limit. Only that contract uses these helpers.
+//! repository's 400-line limit. Only that contract uses these readers. The
+//! text sits behind small wrapper types (`Command`, `Workflow`, `Job`,
+//! `Step`, `Manifest`), so each question is a method on what it reads.
 
 use cap_std::{ambient_authority, fs::Dir};
 
-/// Cargo options that take their value as the next word.
-pub(crate) const CARGO_VALUE_OPTIONS: [&str; 6] = [
-    "--config",
-    "-Z",
-    "-C",
-    "--manifest-path",
-    "--color",
-    "--target-dir",
-];
-
-/// Make options that take their value as the next word.
-pub(crate) const MAKE_VALUE_OPTIONS: [&str; 8] = [
-    "-C",
-    "-f",
-    "-I",
-    "-o",
-    "-W",
-    "--directory",
-    "--file",
-    "--makefile",
-];
-
-/// Cargo subcommands that run the suite.
-pub(crate) const SUITE_SUBCOMMANDS: [&str; 3] = ["test", "nextest", "llvm-cov"];
-
-/// Make targets that run the suite.
-pub(crate) const SUITE_TARGETS: [&str; 2] = ["test", "all"];
+mod shell;
+mod tokenizer;
 
 /// Opens the crate manifest directory as a capability-scoped handle.
 pub(crate) fn manifest_dir() -> std::io::Result<Dir> {
     Dir::open_ambient_dir(env!("CARGO_MANIFEST_DIR"), ambient_authority())
+}
+
+/// Returns the Makefile's default goal: what a bare `make` runs.
+pub(crate) fn default_goal() -> std::io::Result<String> {
+    Ok(default_goal_of(
+        &manifest_dir()?.read_to_string("Makefile")?,
+    ))
+}
+
+/// Reads the default goal from Makefile text: what `.DEFAULT_GOAL` holds once
+/// every assignment has been applied in order (GNU make manual, "Other
+/// Special Variables"), otherwise the first rule that
+/// is not a special or pattern target.
+pub(crate) fn default_goal_of(makefile: &str) -> String {
+    let assigned = makefile
+        .lines()
+        .filter(|line| !line.starts_with('\t'))
+        .filter_map(assignment_of)
+        .fold(None, apply)
+        .filter(|goal| !goal.contains(char::is_whitespace));
+    assigned
+        .or_else(|| makefile.lines().find_map(first_goal))
+        .unwrap_or_default()
+}
+
+/// How an assignment to `.DEFAULT_GOAL` combines with the value before it.
+#[derive(Clone, Copy)]
+enum Assignment<'a> {
+    /// `=` and `:=` replace the value, and an empty one clears it.
+    Set(&'a str),
+    /// `+=` appends a word, and make refuses a default goal of several.
+    Append(&'a str),
+}
+
+/// Returns the assignment to `.DEFAULT_GOAL` a line makes, if it makes one.
+///
+/// A `?=` line is not one: make defines `.DEFAULT_GOAL` itself, empty, before
+/// it reads a makefile, so `?=` finds it defined and changes nothing.
+fn assignment_of(line: &str) -> Option<Assignment<'_>> {
+    let (left, right) = line.split_once(":=").or_else(|| line.split_once('='))?;
+    let (name, value) = (left.trim_end(), right.trim());
+    let is_goal = |base: &str| base.trim_end() == ".DEFAULT_GOAL";
+    if name.strip_suffix('+').is_some_and(is_goal) {
+        Some(Assignment::Append(value))
+    } else {
+        is_goal(name.trim_end_matches(':')).then_some(Assignment::Set(value))
+    }
+}
+
+/// Returns the value of `.DEFAULT_GOAL` after one more assignment.
+fn apply(current: Option<String>, assignment: Assignment<'_>) -> Option<String> {
+    let value = match assignment {
+        Assignment::Set(value) => Some(value.to_owned()),
+        Assignment::Append(value) => Some(format!("{} {value}", current.unwrap_or_default())),
+    };
+    value
+        .map(|goal| goal.trim().to_owned())
+        .filter(|goal| !goal.is_empty())
+}
+
+/// Returns the first goal a rule line names, or `None` for any other line.
+fn first_goal(line: &str) -> Option<String> {
+    if line.starts_with(['\t', ' ', '#', '.']) {
+        return None;
+    }
+    let (names, rest) = line.split_once(':')?;
+    if rest.starts_with('=') || names.contains(['=', '%', '$']) {
+        return None;
+    }
+    names.split_whitespace().next().map(str::to_owned)
 }
 
 /// Returns every workflow file's name and text.
@@ -45,9 +92,9 @@ pub(crate) fn workflows() -> std::io::Result<Vec<(String, String)>> {
     let mut found = Vec::new();
     for entry in dir.entries()? {
         let name = entry?.file_name().to_string_lossy().into_owned();
-        let is_workflow = std::path::Path::new(&name)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
+        let is_workflow = name.rsplit_once('.').is_some_and(|(_, extension)| {
+            extension.eq_ignore_ascii_case("yml") || extension.eq_ignore_ascii_case("yaml")
+        });
         if is_workflow {
             let text = dir.read_to_string(&name)?;
             found.push((name, text));
@@ -56,180 +103,239 @@ pub(crate) fn workflows() -> std::io::Result<Vec<(String, String)>> {
     Ok(found)
 }
 
-/// Splits a command into the word lists of its shell segments, so a suite
-/// run after `&&`, `||`, `;` or `|` is read as its own command.
-pub(crate) fn segments(command: &str) -> Vec<Vec<&str>> {
-    let mut found = Vec::new();
-    let mut current = Vec::new();
-    for word in command.split_whitespace() {
-        let trimmed = word.trim_end_matches(';');
-        let separator = matches!(word, "&&" | "||" | "|") || trimmed.is_empty();
-        if !separator {
-            current.push(trimmed);
-        }
-        if separator || word.ends_with(';') {
-            found.push(std::mem::take(&mut current));
-        }
+/// One shell command line from a workflow.
+#[derive(Clone, Copy)]
+pub(crate) struct Command<'a>(&'a str);
+
+impl<'a> Command<'a> {
+    /// Reads a workflow line as a command: without a `run:` prefix, whether
+    /// or not it opens a step with `- `, and empty for a comment. Every line
+    /// is read, so a suite run inside a multi-line `run: |` block is seen as
+    /// well as a single-line one.
+    pub(crate) fn from_line(line: &'a str) -> Self {
+        let trimmed = line.trim();
+        let item = trimmed.strip_prefix("- ").map_or(trimmed, str::trim_start);
+        let command = if trimmed.starts_with('#') {
+            ""
+        } else {
+            item.strip_prefix("run:").map_or(item, str::trim)
+        };
+        Self(command)
     }
-    found.push(current);
-    found
-}
 
-/// Returns the words after the first word equal to `program`, or naming it
-/// by path, in one segment.
-pub(crate) fn arguments_of<'a>(words: &[&'a str], program: &str) -> Option<Vec<&'a str>> {
-    let suffix = format!("/{program}");
-    let start = words
-        .iter()
-        .position(|word| *word == program || word.ends_with(&suffix))?;
-    Some(words.get(start + 1..).unwrap_or_default().to_vec())
-}
+    /// Returns the command's text.
+    pub(crate) const fn text(self) -> &'a str { self.0 }
 
-/// Returns `true` if a word is an operand rather than an option, a
-/// toolchain selector or a variable assignment.
-pub(crate) fn is_operand(word: &str) -> bool {
-    let is_flag = word.starts_with('-') || word.starts_with('+');
-    !is_flag && !word.contains('=')
-}
-
-/// Returns the operands of a command line: its words less options, their
-/// values, toolchain selectors and variable assignments.
-pub(crate) fn operands<'a>(arguments: &[&'a str], value_options: &[&str]) -> Vec<&'a str> {
-    let mut found = Vec::new();
-    let mut words = arguments.iter();
-    while let Some(word) = words.next() {
-        if value_options.contains(word) {
-            words.next();
-        } else if is_operand(word) {
-            found.push(*word);
-        }
+    /// Returns `true` if the command runs the suite.
+    pub(crate) fn runs_suite(self, default_goal: &str) -> bool {
+        shell::runs_suite(self.0, default_goal)
     }
-    found
 }
 
-/// Returns `true` if one shell segment runs the suite.
-pub(crate) fn segment_runs_suite(words: &[&str]) -> bool {
-    let cargo = arguments_of(words, "cargo").is_some_and(|arguments| {
-        operands(&arguments, &CARGO_VALUE_OPTIONS)
-            .first()
-            .is_some_and(|subcommand| SUITE_SUBCOMMANDS.contains(subcommand))
-    });
-    let make = arguments_of(words, "make").is_some_and(|arguments| {
-        operands(&arguments, &MAKE_VALUE_OPTIONS)
-            .iter()
-            .any(|target| SUITE_TARGETS.contains(target))
-    });
-    cargo || make
-}
+/// Returns a line's indentation width.
+fn indent(line: &str) -> usize { line.len() - line.trim_start().len() }
 
-/// Returns `true` if a shell command line runs the suite, in any spelling.
-pub(crate) fn runs_suite(line: &str) -> bool {
-    segments(line).iter().any(|words| segment_runs_suite(words))
-}
+/// Returns `true` for a line that opens a YAML list item.
+fn is_item(line: &str) -> bool { line.trim_start().starts_with("- ") }
 
-/// Returns the command a `run:` line carries, or `None` for other lines.
-pub(crate) fn run_command(line: &str) -> Option<&str> {
-    line.trim_start().strip_prefix("run:").map(str::trim)
-}
-
-/// Returns a workflow line as a command: without a `run:` prefix, and empty
-/// for a comment. Every line is read, so a suite run inside a multi-line
-/// `run: |` block is seen as well as a single-line one.
-pub(crate) fn command_text(line: &str) -> &str {
+/// Returns `true` for a line that carries no YAML content.
+fn is_blank_or_comment(line: &str) -> bool {
     let trimmed = line.trim();
-    if trimmed.starts_with('#') {
-        return "";
+    trimmed.is_empty() || trimmed.starts_with('#')
+}
+
+/// A workflow document's text.
+#[derive(Clone, Copy)]
+pub(crate) struct Workflow<'a>(pub(crate) &'a str);
+
+/// One job of a workflow: its name and the lines under it.
+pub(crate) struct Job<'a> {
+    /// The job's key under `jobs:`.
+    pub(crate) name: &'a str,
+    /// The lines between this job's key and the next one.
+    lines: Vec<&'a str>,
+}
+
+/// One step of a job, as its lines.
+pub(crate) struct Step<'a>(Vec<&'a str>);
+
+impl<'a> Workflow<'a> {
+    /// Returns each job, in order. A job key is any line indented one level
+    /// under `jobs:`, whatever that level's width.
+    pub(crate) fn jobs(self) -> Vec<Job<'a>> {
+        let section: Vec<&'a str> = self
+            .0
+            .lines()
+            .skip_while(|line| line.trim_end() != "jobs:")
+            .skip(1)
+            .filter(|line| !is_blank_or_comment(line))
+            .take_while(|line| indent(line) > 0)
+            .collect();
+        let level = section.first().map_or(0, |line| indent(line));
+        let mut found: Vec<Job<'a>> = Vec::new();
+        for line in section {
+            match line.trim().strip_suffix(':') {
+                Some(name) if indent(line) == level => found.push(Job {
+                    name,
+                    lines: Vec::new(),
+                }),
+                _ => found
+                    .last_mut()
+                    .into_iter()
+                    .for_each(|job| job.lines.push(line)),
+            }
+        }
+        found
     }
-    run_command(trimmed).unwrap_or(trimmed)
 }
 
-/// Returns the name of the job a line opens, for a `  name:` line under
-/// `jobs:`.
-pub(crate) fn job_header(line: &str) -> Option<&str> {
-    let name = line.strip_prefix("  ")?.strip_suffix(':')?;
-    let is_name = !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    is_name.then_some(name)
-}
-
-/// Returns each job's name and lines, in order.
-pub(crate) fn jobs(workflow: &str) -> Vec<(&str, Vec<&str>)> {
-    let mut found: Vec<(&str, Vec<&str>)> = Vec::new();
-    let mut in_jobs = false;
-    for line in workflow.lines() {
-        if !line.starts_with(' ') && !line.trim().is_empty() {
-            in_jobs = line.trim_end() == "jobs:";
-            continue;
-        }
-        if !in_jobs {
-            continue;
-        }
-        if let Some(name) = job_header(line) {
-            found.push((name, Vec::new()));
-        } else if let Some((_, lines)) = found.last_mut() {
-            lines.push(line);
-        }
+impl<'a> Job<'a> {
+    /// Returns `true` if the job carries its own `if:` condition, read at
+    /// the job's own key indentation, whatever its width.
+    pub(crate) fn is_conditional(&self) -> bool {
+        let level = self.lines.iter().map(|line| indent(line)).min();
+        self.lines
+            .iter()
+            .any(|line| Some(indent(line)) == level && line.trim_start().starts_with("if:"))
     }
-    found
-}
 
-/// Splits a job into its steps, each a run of lines starting at a `- ` list
-/// item, so a step can be found by what it runs rather than by its name.
-pub(crate) fn steps<'a>(job: &[&'a str]) -> Vec<Vec<&'a str>> {
-    let mut found: Vec<Vec<&'a str>> = Vec::new();
-    for line in job {
-        if line.trim_start().starts_with("- ") {
-            found.push(Vec::new());
-        }
-        if let Some(step) = found.last_mut() {
-            step.push(line);
-        }
+    /// Returns the job's lines as commands.
+    pub(crate) fn commands(&self) -> impl Iterator<Item = Command<'a>> + '_ {
+        self.lines.iter().map(|line| Command::from_line(line))
     }
-    found
+
+    /// Splits the job into steps, each a run of lines starting at a `- `
+    /// item at the step list's own indentation, so a step can be found by
+    /// what it does, not its name, and a nested list inside a step does not
+    /// split it.
+    pub(crate) fn steps(&self) -> Vec<Step<'a>> {
+        let items = self
+            .lines
+            .iter()
+            .skip_while(|line| line.trim() != "steps:")
+            .skip(1);
+        let level = items
+            .clone()
+            .find(|line| is_item(line))
+            .map(|line| indent(line));
+        let mut found: Vec<Step<'a>> = Vec::new();
+        for line in items {
+            if is_item(line) && Some(indent(line)) == level {
+                found.push(Step(Vec::new()));
+            }
+            found
+                .last_mut()
+                .into_iter()
+                .for_each(|step| step.0.push(line));
+        }
+        found
+    }
 }
 
-/// Returns `true` if a job carries its own `if:` condition.
-pub(crate) fn job_is_conditional(job: &[&str]) -> bool {
-    job.iter().any(|line| line.starts_with("    if:"))
+impl Step<'_> {
+    /// Returns `true` if the step carries an `if:` condition of its own: on
+    /// its item line or at the indentation of the item's other keys, so an
+    /// `if:` under `with:` or inside a `run:` body does not count.
+    pub(crate) fn is_conditional(&self) -> bool {
+        let Some((first, rest)) = self.0.split_first() else {
+            return false;
+        };
+        let item = first.trim_start();
+        let Some(body) = item.strip_prefix("- ") else {
+            return false;
+        };
+        let level = indent(first) + (item.len() - body.trim_start().len());
+        body.trim_start().starts_with("if:")
+            || rest
+                .iter()
+                .any(|line| indent(line) == level && line.trim_start().starts_with("if:"))
+    }
+
+    /// Returns `true` if one of the step's lines runs exactly `command`,
+    /// whether inline after `run:` or as a line of a `run: |` block.
+    pub(crate) fn runs(&self, command: Command<'_>) -> bool {
+        self.0
+            .iter()
+            .any(|line| Command::from_line(line).text() == command.text())
+    }
+
+    /// Returns `true` if the step uses an action whose reference contains
+    /// `action`.
+    pub(crate) fn uses(&self, action: &str) -> bool {
+        self.0
+            .iter()
+            .any(|line| line.contains("uses:") && line.contains(action))
+    }
 }
 
-/// Returns `true` if a step carries an `if:` condition.
-pub(crate) fn step_is_conditional(step: &[&str]) -> bool {
-    step.iter().any(|line| {
-        line.trim_start()
-            .trim_start_matches("- ")
-            .starts_with("if:")
-    })
-}
+/// A parsed `Cargo.toml`.
+pub(crate) struct Manifest(toml::Value);
 
-/// Returns a manifest's feature names, with each optional dependency, which
-/// Cargo turns into an implicit feature, added by name.
-pub(crate) fn manifest_features(manifest: &str) -> Result<Vec<String>, toml::de::Error> {
-    let parsed: toml::Value = toml::from_str(manifest)?;
-    let mut found: Vec<String> = parsed
-        .get("features")
-        .and_then(toml::Value::as_table)
-        .map(|table| table.keys().cloned().collect())
-        .unwrap_or_default();
-    let tables = ["dependencies", "dev-dependencies", "build-dependencies"];
-    let mut dependency_tables: Vec<&toml::Value> =
-        tables.iter().filter_map(|name| parsed.get(*name)).collect();
-    if let Some(targets) = parsed.get("target").and_then(toml::Value::as_table) {
-        dependency_tables.extend(
-            targets
-                .values()
-                .flat_map(|platform| tables.iter().filter_map(move |name| platform.get(*name))),
+impl Manifest {
+    /// Parses a manifest.
+    ///
+    /// # Errors
+    ///
+    /// Returns the parser's error when the text is not TOML.
+    pub(crate) fn parse(text: &str) -> Result<Self, toml::de::Error> {
+        Ok(Self(toml::from_str(text)?))
+    }
+
+    /// Returns the manifest's feature names: the `[features]` keys, plus
+    /// each optional dependency Cargo turns into an implicit feature. An
+    /// optional dependency named anywhere as `dep:<name>` exposes no
+    /// implicit feature, as Cargo documents, so it is left out.
+    pub(crate) fn features(&self) -> Vec<String> {
+        let table = self.0.get("features").and_then(toml::Value::as_table);
+        let mut found: Vec<String> = table
+            .map(|t| t.keys().cloned().collect())
+            .unwrap_or_default();
+        let suppressed: Vec<String> = found
+            .iter()
+            .flat_map(|name| self.feature_values(name))
+            .filter_map(|value| value.strip_prefix("dep:").map(str::to_owned))
+            .collect();
+        found.extend(
+            self.optional_dependencies()
+                .into_iter()
+                .filter(|name| !suppressed.contains(name)),
         );
+        found
     }
-    found.extend(
+
+    /// Returns the values one feature enables.
+    fn feature_values(&self, feature: &str) -> Vec<String> {
+        self.0
+            .get("features")
+            .and_then(|features| features.get(feature))
+            .and_then(toml::Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(toml::Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Returns every optional dependency's name, target tables included.
+    fn optional_dependencies(&self) -> Vec<String> {
+        let tables = ["dependencies", "dev-dependencies", "build-dependencies"];
+        let mut dependency_tables: Vec<&toml::Value> =
+            tables.iter().filter_map(|name| self.0.get(*name)).collect();
+        if let Some(targets) = self.0.get("target").and_then(toml::Value::as_table) {
+            dependency_tables.extend(
+                targets
+                    .values()
+                    .flat_map(|platform| tables.iter().filter_map(move |name| platform.get(*name))),
+            );
+        }
         dependency_tables
             .iter()
             .filter_map(|table| table.as_table())
             .flat_map(|table| table.iter())
             .filter(|(_, spec)| spec.get("optional").and_then(toml::Value::as_bool) == Some(true))
-            .map(|(name, _)| name.clone()),
-    );
-    Ok(found)
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
 }
