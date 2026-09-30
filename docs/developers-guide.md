@@ -54,6 +54,24 @@ only where that goal runs the suite. Extend the readers by adding a spelling
 case to the contract, and prove it with a mutation of `ci.yml` that the
 previous reader missed.
 
+A bare `make` runs the Makefile's default goal, so the suite-once contract
+reads that goal from the Makefile (`default_goal_of` in
+`tests/workflow_suite/reading.rs`). It applies the `.DEFAULT_GOAL` assignments
+in order, as GNU make does (manual, "Other Special Variables"). `=` and `:=`
+replace the value, so the last one wins. `?=` changes nothing, because make
+defines `.DEFAULT_GOAL` itself, empty, before it reads a makefile. `+=` appends
+a word, and an empty value clears it. A value of several words, which make
+refuses, is not read, and the reader falls back to the first rule that is not a
+special or pattern target. A tab-indented line is recipe text, not an
+assignment.
+
+`the_reader_agrees_with_gnu_make` pins this to make itself and not to a reading
+of its manual. It runs `make -f - -pn` on each fixture and compares the goal
+make settles on (the `.DEFAULT_GOAL` line of the variable database) with the
+reader's. The test is compiled on Linux only and needs GNU make on `PATH`. A
+Linux host without it fails the test where it calls `make` rather than skipping
+it, so install make before running `make test` there.
+
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single
