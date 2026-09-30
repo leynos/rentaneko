@@ -63,7 +63,10 @@ defines `.DEFAULT_GOAL` itself, empty, before it reads a makefile. `+=` appends
 a word, and an empty value clears it. A value of several words, which make
 refuses, is not read, and the reader falls back to the first rule that is not a
 special or pattern target. A tab-indented line is recipe text, not an
-assignment.
+assignment. The reader keeps each right-hand side as written and does not
+expand variable references, so `.DEFAULT_GOAL = $(GOAL)` reads as `$(GOAL)`
+where make would expand it; the fixtures that pin the reader to make use
+literal goals.
 
 `the_reader_agrees_with_gnu_make` pins this to make itself and not to a reading
 of its manual. It runs `make -f - -pn` on each fixture and compares the goal

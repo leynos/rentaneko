@@ -540,25 +540,80 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
     }))
 }
 
-/// Returns whether the `make` on `PATH` is GNU make, saying why not on stderr
-/// when it is not, so a host without it skips the make-backed tests visibly
-/// instead of failing on a missing binary.
+/// What the `make` on `PATH` turned out to be.
 #[cfg(target_os = "linux")]
-fn gnu_make_is_available() -> bool {
-    let is_gnu = std::process::Command::new("make")
-        .arg("--version")
-        .output()
-        .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).contains("GNU Make"));
-    if !is_gnu {
-        // Written to stderr directly: the reason must be visible in a run
-        // with `--nocapture`, and `eprintln!` is denied here.
-        std::io::Write::write_all(
-            &mut std::io::stderr(),
-            b"skipped: GNU make is not on PATH, so the reader cannot be pinned to it\n",
-        )
-        .ok();
+#[derive(Debug, PartialEq)]
+enum MakeProbe {
+    /// GNU make, which the reader can be pinned to.
+    Gnu,
+    /// No `make` could be started, or it did not answer `--version`.
+    Absent,
+    /// A `make` that does not identify itself as GNU make.
+    NotGnu,
+}
+
+/// Classifies what `make --version` returned. Pure, so the cases that skip
+/// are tested without a host that lacks make.
+#[cfg(target_os = "linux")]
+fn classify_make(version: std::io::Result<String>) -> MakeProbe {
+    match version {
+        Err(_) => MakeProbe::Absent,
+        Ok(text) if text.contains("GNU Make") => MakeProbe::Gnu,
+        Ok(_) => MakeProbe::NotGnu,
     }
-    is_gnu
+}
+
+/// Runs `make --version` and returns its standard output.
+#[cfg(target_os = "linux")]
+fn make_version() -> std::io::Result<String> {
+    let output = std::process::Command::new("make")
+        .arg("--version")
+        .output()?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Returns why the make-backed tests must skip, or `None` where GNU make is on
+/// `PATH`.
+#[cfg(target_os = "linux")]
+const fn skip_reason(probe: &MakeProbe) -> Option<&'static str> {
+    match probe {
+        MakeProbe::Gnu => None,
+        MakeProbe::Absent => {
+            Some("skipped: make could not be run, so the reader cannot be pinned to it\n")
+        }
+        MakeProbe::NotGnu => {
+            Some("skipped: make is not GNU make, so the reader cannot be pinned to it\n")
+        }
+    }
+}
+
+/// Returns `true` where the make-backed tests must skip, after writing the
+/// reason to stderr so it is visible in a run with `--nocapture` (`eprintln!`
+/// is denied here, so the write goes through `std::io::stderr()`).
+#[cfg(target_os = "linux")]
+fn skips_without_gnu_make() -> bool {
+    let Some(reason) = skip_reason(&classify_make(make_version())) else {
+        return false;
+    };
+    std::io::Write::write_all(&mut std::io::stderr(), reason.as_bytes()).ok();
+    true
+}
+
+/// Each way `make --version` can answer selects the skip or the run.
+#[cfg(target_os = "linux")]
+#[rstest]
+#[case::gnu(Ok("GNU Make 4.4.1\nBuilt for x86_64-pc-linux-gnu\n".to_owned()), MakeProbe::Gnu)]
+#[case::bsd(Ok("bmake 20240101\n".to_owned()), MakeProbe::NotGnu)]
+#[case::silent(Ok(String::new()), MakeProbe::NotGnu)]
+#[case::missing(Err(std::io::ErrorKind::NotFound.into()), MakeProbe::Absent)]
+#[case::refused(Err(std::io::ErrorKind::PermissionDenied.into()), MakeProbe::Absent)]
+fn make_is_classified_from_its_version(
+    #[case] version: std::io::Result<String>,
+    #[case] expected: MakeProbe,
+) {
+    let probe = classify_make(version);
+    assert_eq!(probe, expected);
+    assert_eq!(skip_reason(&probe).is_none(), expected == MakeProbe::Gnu);
 }
 
 /// The reader agrees with GNU make on every Makefile it can be run on, so the
@@ -583,7 +638,7 @@ fn gnu_make_is_available() -> bool {
 #[case::special_targets_are_skipped(".PHONY: a\n.SUFFIXES:\nrun:\n")]
 #[case::recipe_text_is_not_an_assignment("first:\n\t@: .DEFAULT_GOAL = test\nsecond:\n")]
 fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
-    if !gnu_make_is_available() {
+    if skips_without_gnu_make() {
         return;
     }
     let by_make = make_default_goal(makefile)
@@ -597,7 +652,7 @@ fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
 #[cfg(target_os = "linux")]
 #[test]
 fn make_refuses_several_words_and_the_reader_does_not_read_them() {
-    if !gnu_make_is_available() {
+    if skips_without_gnu_make() {
         return;
     }
     let makefile = ".DEFAULT_GOAL := first\n.DEFAULT_GOAL += second\nbuild:\nfirst:\nsecond:\n";
