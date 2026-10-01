@@ -65,13 +65,28 @@ impl Skip {
     }
 }
 
-/// Runs `make --version` and returns its standard output. The only fallible
-/// probe: it starts the process and does nothing else.
+/// Reads what `make --version` printed, from the process's exit status and
+/// standard output. A failed run is an error, so the tests skip as `Absent`
+/// instead of reading whatever a broken `make` printed.
+///
+/// # Errors
+///
+/// Returns an error where `make --version` did not exit successfully.
+fn version_from(succeeded: bool, stdout: &[u8]) -> std::io::Result<String> {
+    if succeeded {
+        Ok(String::from_utf8_lossy(stdout).into_owned())
+    } else {
+        Err(std::io::Error::other("make --version failed"))
+    }
+}
+
+/// Runs `make --version` and returns its standard output. The only process
+/// call: it starts `make` and hands the outcome to [`version_from`].
 fn make_version() -> std::io::Result<String> {
     let output = std::process::Command::new("make")
         .arg("--version")
         .output()?;
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    version_from(output.status.success(), &output.stdout)
 }
 
 /// Decides from the `make --version` result whether GNU make is available.
@@ -98,6 +113,24 @@ fn report_skip(out: &mut impl std::io::Write, skip: &Skip) -> std::io::Result<()
     out.write_all(skip.reason().as_bytes())
 }
 
+/// Joins a probe result to a report: writes the skip reason to `out` and
+/// returns `true` where the test must stop, `false` (writing nothing) where
+/// GNU make is available. The probe and the writer are supplied, so both
+/// outcomes are tested without a host that lacks make.
+///
+/// # Errors
+///
+/// Returns the error `out` raised while writing the reason.
+fn stop_unless_gnu(
+    version: std::io::Result<String>,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<bool> {
+    match require_gnu_make(version) {
+        Ok(()) => Ok(false),
+        Err(skip) => report_skip(out, &skip).map(|()| true),
+    }
+}
+
 /// Reports a skip on stderr, which `--nocapture` shows (`eprintln!` is denied
 /// here), and returns `true` where the test must stop.
 ///
@@ -105,9 +138,65 @@ fn report_skip(out: &mut impl std::io::Write, skip: &Skip) -> std::io::Result<()
 ///
 /// Returns the error stderr raised while writing the reason.
 fn stop_without_gnu_make() -> std::io::Result<bool> {
-    match require_gnu_make(make_version()) {
-        Ok(()) => Ok(false),
-        Err(skip) => report_skip(&mut std::io::stderr(), &skip).map(|()| true),
+    stop_unless_gnu(make_version(), &mut std::io::stderr())
+}
+
+/// The boundary stops and reports for a make that is absent or not GNU, runs
+/// and writes nothing for GNU make, and surfaces a failing writer.
+#[rstest]
+#[case::gnu(Ok("GNU Make 4.4.1\n".to_owned()), false, "")]
+#[case::bsd(
+    Ok("bmake 20240101\n".to_owned()),
+    true,
+    "skipped: make is not GNU make, so the reader cannot be pinned to it\n"
+)]
+#[case::missing(
+    Err(std::io::ErrorKind::NotFound.into()),
+    true,
+    "skipped: make could not be run, so the reader cannot be pinned to it\n"
+)]
+fn the_boundary_stops_and_reports_or_runs(
+    #[case] version: std::io::Result<String>,
+    #[case] stops: bool,
+    #[case] written: &str,
+) {
+    let mut out = Vec::new();
+    assert_eq!(
+        stop_unless_gnu(version, &mut out).expect("a Vec accepts every write"),
+        stops
+    );
+    assert_eq!(
+        String::from_utf8(out).expect("the report is UTF-8"),
+        written
+    );
+}
+
+#[test]
+fn the_boundary_surfaces_a_failing_writer_only_when_it_must_report() {
+    let error = stop_unless_gnu(Err(std::io::ErrorKind::NotFound.into()), &mut Refusing)
+        .expect_err("a skip that cannot be reported is an error");
+    assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+    assert!(
+        !stop_unless_gnu(Ok("GNU Make 4.4.1\n".to_owned()), &mut Refusing)
+            .expect("GNU make writes nothing, so a refusing writer is never reached")
+    );
+}
+
+/// A failed `make --version` is an error whatever it printed, and a
+/// successful one is its output, so a broken make skips as `Absent`.
+#[rstest]
+#[case::ok(true, b"GNU Make 4.4.1\n", Some("GNU Make 4.4.1\n"))]
+#[case::failed_but_gnu_looking(false, b"GNU Make 4.4.1\n", None)]
+#[case::failed_and_silent(false, b"", None)]
+fn a_failed_version_probe_is_an_error(
+    #[case] succeeded: bool,
+    #[case] stdout: &[u8],
+    #[case] expected: Option<&str>,
+) {
+    assert_eq!(version_from(succeeded, stdout).ok().as_deref(), expected);
+    if !succeeded {
+        let outcome = require_gnu_make(version_from(succeeded, stdout));
+        assert_eq!(outcome, Err(Skip::Absent));
     }
 }
 
