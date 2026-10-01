@@ -26,6 +26,7 @@ jobs:
           expect-cache: any
       - name: Install cargo-audit
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm cargo-audit
       - name: Setup Python for audit manifest extraction
