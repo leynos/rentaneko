@@ -11,11 +11,25 @@ use rstest::rstest;
 
 use super::reading::default_goal_of;
 
-/// Returns what GNU make itself takes as the default goal of `makefile`, or
-/// `None` when make refuses it. `make -pn` prints the variable database
-/// without running a recipe, and `.DEFAULT_GOAL` is the value make settled on
-/// after reading every assignment (GNU make manual, "Other Special Variables").
-fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
+/// What GNU make made of a fixture: the default goal it settled on, if it
+/// accepted the Makefile, and what it wrote to stderr.
+struct GoalProbe {
+    /// The `.DEFAULT_GOAL` make settled on, or `None` where it refused.
+    goal: Option<String>,
+    /// Make's stderr, so a caller can show why a fixture was refused.
+    diagnostic: String,
+}
+
+/// Returns what GNU make itself takes as the default goal of `makefile`, with
+/// its diagnostic. `make -pn` prints the variable database without running a
+/// recipe, and `.DEFAULT_GOAL` is the value make settled on after reading every
+/// assignment (GNU make manual, "Other Special Variables"). It only runs the
+/// probe and returns its result; reporting is the caller's.
+///
+/// # Errors
+///
+/// Returns the error raised starting `make` or feeding it the fixture.
+fn make_default_goal(makefile: &str) -> std::io::Result<GoalProbe> {
     use std::{
         io::Write as _,
         process::{Command as Process, Stdio},
@@ -36,17 +50,16 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
         .write_all(makefile.as_bytes())?;
     let output = child.wait_with_output()?;
     let text = String::from_utf8_lossy(&output.stdout);
-    if !output.status.success() {
-        // Show why make refused the fixture, so a failing case names its cause.
-        // `eprintln!` is denied here, so the write goes through stderr directly.
-        std::io::stderr().write_all(&output.stderr)?;
-    }
-    Ok(output.status.success().then_some(()).and_then(|()| {
+    let goal = output.status.success().then_some(()).and_then(|()| {
         text.lines().find_map(|line| {
             let (name, value) = line.split_once(" = ").or_else(|| line.split_once(" := "))?;
             (name == ".DEFAULT_GOAL").then(|| value.to_owned())
         })
-    }))
+    });
+    Ok(GoalProbe {
+        goal,
+        diagnostic: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
 }
 
 /// Why the make-backed tests cannot run on this host.
@@ -283,9 +296,10 @@ fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
     if stop_without_gnu_make().expect("stderr must be writable") {
         return;
     }
-    let by_make = make_default_goal(makefile)
-        .expect("make must run")
-        .expect("make must accept the fixture");
+    let probe = make_default_goal(makefile).expect("make must run");
+    let Some(by_make) = probe.goal else {
+        panic!("make refused {makefile:?}: {}", probe.diagnostic);
+    };
     assert_eq!(default_goal_of(makefile), by_make, "{makefile:?}");
 }
 
@@ -297,6 +311,11 @@ fn make_refuses_several_words_and_the_reader_does_not_read_them() {
         return;
     }
     let makefile = ".DEFAULT_GOAL := first\n.DEFAULT_GOAL += second\nbuild:\nfirst:\nsecond:\n";
-    assert_eq!(make_default_goal(makefile).expect("make must run"), None);
+    let probe = make_default_goal(makefile).expect("make must run");
+    assert_eq!(probe.goal, None, "make must refuse several words");
+    assert!(
+        !probe.diagnostic.is_empty(),
+        "make must say why it refused the fixture"
+    );
     assert_eq!(default_goal_of(makefile), "build");
 }
