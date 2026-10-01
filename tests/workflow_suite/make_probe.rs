@@ -27,7 +27,7 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
         .env_remove("MAKELEVEL")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     child
         .stdin
@@ -36,6 +36,11 @@ fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
         .write_all(makefile.as_bytes())?;
     let output = child.wait_with_output()?;
     let text = String::from_utf8_lossy(&output.stdout);
+    if !output.status.success() {
+        // Show why make refused the fixture, so a failing case names its cause.
+        // `eprintln!` is denied here, so the write goes through stderr directly.
+        std::io::stderr().write_all(&output.stderr)?;
+    }
     Ok(output.status.success().then_some(()).and_then(|()| {
         text.lines().find_map(|line| {
             let (name, value) = line.split_once(" = ").or_else(|| line.split_once(" := "))?;
