@@ -1,0 +1,208 @@
+//! The make-backed half of the suite-once contract: the reader's default goal
+//! is compared with the one GNU make itself settles on, so the behaviour is
+//! pinned to make and not to anyone's reading of its manual.
+//!
+//! Linux only, where GNU make is the make in use. The tests skip, writing the
+//! reason to stderr, on a host where `make` is absent or is not GNU make. The
+//! probe, the decision and the report are separate units so each is tested on
+//! its own.
+
+use rstest::rstest;
+
+use super::reading::default_goal_of;
+
+/// Returns what GNU make itself takes as the default goal of `makefile`, or
+/// `None` when make refuses it. `make -pn` prints the variable database
+/// without running a recipe, and `.DEFAULT_GOAL` is the value make settled on
+/// after reading every assignment (GNU make manual, "Other Special Variables").
+fn make_default_goal(makefile: &str) -> std::io::Result<Option<String>> {
+    use std::{
+        io::Write as _,
+        process::{Command as Process, Stdio},
+    };
+
+    let mut child = Process::new("make")
+        .args(["-f", "-", "-pn"])
+        .env_remove("MAKEFLAGS")
+        .env_remove("MAKELEVEL")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| std::io::Error::other("make's stdin was not piped"))?
+        .write_all(makefile.as_bytes())?;
+    let output = child.wait_with_output()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    Ok(output.status.success().then_some(()).and_then(|()| {
+        text.lines().find_map(|line| {
+            let (name, value) = line.split_once(" = ").or_else(|| line.split_once(" := "))?;
+            (name == ".DEFAULT_GOAL").then(|| value.to_owned())
+        })
+    }))
+}
+
+/// Why the make-backed tests cannot run on this host.
+#[derive(Debug, PartialEq, Eq)]
+enum Skip {
+    /// No `make` could be started, or it did not answer `--version`.
+    Absent,
+    /// A `make` that does not identify itself as GNU make.
+    NotGnu,
+}
+
+impl Skip {
+    /// Returns the reason printed when the tests skip.
+    const fn reason(&self) -> &'static str {
+        match self {
+            Self::Absent => {
+                "skipped: make could not be run, so the reader cannot be pinned to it\n"
+            }
+            Self::NotGnu => "skipped: make is not GNU make, so the reader cannot be pinned to it\n",
+        }
+    }
+}
+
+/// Runs `make --version` and returns its standard output. The only fallible
+/// probe: it starts the process and does nothing else.
+fn make_version() -> std::io::Result<String> {
+    let output = std::process::Command::new("make")
+        .arg("--version")
+        .output()?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Decides from the `make --version` result whether GNU make is available.
+/// Pure: a missing or unstartable make is `Absent`, any other make is
+/// `NotGnu`.
+///
+/// # Errors
+///
+/// Returns the [`Skip`] reason where the tests cannot run.
+fn require_gnu_make(version: std::io::Result<String>) -> Result<(), Skip> {
+    match version {
+        Err(_) => Err(Skip::Absent),
+        Ok(text) if text.contains("GNU Make") => Ok(()),
+        Ok(_) => Err(Skip::NotGnu),
+    }
+}
+
+/// Writes the reason for a skip to `out`, which the caller chooses.
+///
+/// # Errors
+///
+/// Returns the error `out` raised while writing.
+fn report_skip(out: &mut impl std::io::Write, skip: &Skip) -> std::io::Result<()> {
+    out.write_all(skip.reason().as_bytes())
+}
+
+/// Reports a skip on stderr, which `--nocapture` shows (`eprintln!` is denied
+/// here), and returns `true` where the test must stop.
+///
+/// # Errors
+///
+/// Returns the error stderr raised while writing the reason.
+fn stop_without_gnu_make() -> std::io::Result<bool> {
+    match require_gnu_make(make_version()) {
+        Ok(()) => Ok(false),
+        Err(skip) => report_skip(&mut std::io::stderr(), &skip).map(|()| true),
+    }
+}
+
+/// Each way `make --version` can answer is either GNU make or a named skip.
+#[rstest]
+#[case::gnu(Ok("GNU Make 4.4.1\nBuilt for x86_64-pc-linux-gnu\n".to_owned()), Ok(()))]
+#[case::bsd(Ok("bmake 20240101\n".to_owned()), Err(Skip::NotGnu))]
+#[case::silent(Ok(String::new()), Err(Skip::NotGnu))]
+#[case::missing(Err(std::io::ErrorKind::NotFound.into()), Err(Skip::Absent))]
+#[case::refused(Err(std::io::ErrorKind::PermissionDenied.into()), Err(Skip::Absent))]
+fn make_is_classified_from_its_version(
+    #[case] version: std::io::Result<String>,
+    #[case] expected: Result<(), Skip>,
+) {
+    assert_eq!(require_gnu_make(version), expected);
+}
+
+/// The skip messages are user-visible and stable, so they are held exactly,
+/// and the report writes what the reason says and nothing more.
+#[rstest]
+#[case::absent(
+    Skip::Absent,
+    "skipped: make could not be run, so the reader cannot be pinned to it\n"
+)]
+#[case::not_gnu(
+    Skip::NotGnu,
+    "skipped: make is not GNU make, so the reader cannot be pinned to it\n"
+)]
+fn a_skip_is_reported_with_its_exact_reason(#[case] skip: Skip, #[case] expected: &str) {
+    let mut out = Vec::new();
+    report_skip(&mut out, &skip).expect("a Vec accepts every write");
+    assert_eq!(
+        String::from_utf8(out).expect("the report is UTF-8"),
+        expected
+    );
+}
+
+/// A writer that refuses every write, to prove the report's failure surfaces.
+struct Refusing;
+
+impl std::io::Write for Refusing {
+    fn write(&mut self, _bytes: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+}
+
+#[test]
+fn a_failed_report_is_an_error_not_a_silent_skip() {
+    let error = report_skip(&mut Refusing, &Skip::Absent).expect_err("the write must fail");
+    assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+}
+
+/// The reader agrees with GNU make on every Makefile it can be run on, so the
+/// behaviour is pinned to make and not to anyone's reading of its manual.
+#[rstest]
+#[case::first_rule(".PHONY: a\nbuild: x\nx:\n")]
+#[case::assigned(".DEFAULT_GOAL := test\nbuild:\ntest:\n")]
+#[case::conditional(".DEFAULT_GOAL ?= test\nbuild:\ntest:\n")]
+#[case::plain(".DEFAULT_GOAL = test\nbuild:\ntest:\n")]
+#[case::last_assignment_wins(
+    ".DEFAULT_GOAL := first\n.DEFAULT_GOAL := second\nfirst:\nsecond:\nbuild:\n"
+)]
+#[case::conditional_keeps_the_first(
+    ".DEFAULT_GOAL := first\n.DEFAULT_GOAL ?= second\nfirst:\nsecond:\n"
+)]
+#[case::conditional_then_set(".DEFAULT_GOAL ?= second\n.DEFAULT_GOAL := first\nfirst:\nsecond:\n")]
+#[case::a_later_change_to_test(".DEFAULT_GOAL := build\nbuild:\ntest:\n.DEFAULT_GOAL := test\n")]
+#[case::an_empty_value_clears_it(".DEFAULT_GOAL := first\n.DEFAULT_GOAL :=\nbuild:\nfirst:\n")]
+#[case::appending_to_nothing(".DEFAULT_GOAL += test\nbuild:\ntest:\n")]
+#[case::an_empty_append_keeps_the_value(
+    ".DEFAULT_GOAL := first\n.DEFAULT_GOAL +=\nbuild:\nfirst:\n"
+)]
+#[case::comments_are_skipped("# build: not a rule\nrun:\n")]
+#[case::special_targets_are_skipped(".PHONY: a\n.SUFFIXES:\nrun:\n")]
+#[case::recipe_text_is_not_an_assignment("first:\n\t@: .DEFAULT_GOAL = test\nsecond:\n")]
+fn the_reader_agrees_with_gnu_make(#[case] makefile: &str) {
+    if stop_without_gnu_make().expect("stderr must be writable") {
+        return;
+    }
+    let by_make = make_default_goal(makefile)
+        .expect("make must run")
+        .expect("make must accept the fixture");
+    assert_eq!(default_goal_of(makefile), by_make, "{makefile:?}");
+}
+
+/// Make refuses a default goal of several targets; the reader does not read
+/// such a value and falls back to the first rule.
+#[test]
+fn make_refuses_several_words_and_the_reader_does_not_read_them() {
+    if stop_without_gnu_make().expect("stderr must be writable") {
+        return;
+    }
+    let makefile = ".DEFAULT_GOAL := first\n.DEFAULT_GOAL += second\nbuild:\nfirst:\nsecond:\n";
+    assert_eq!(make_default_goal(makefile).expect("make must run"), None);
+    assert_eq!(default_goal_of(makefile), "build");
+}

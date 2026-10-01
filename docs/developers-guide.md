@@ -75,6 +75,15 @@ reader's. The test is compiled on Linux only. It needs GNU make on `PATH` and
 skips, printing the reason, on a host where `make` is absent or is not GNU
 make. CI runs it on Linux, where GNU make is the make in use.
 
+The contract is split so each file stays under 400 lines:
+`tests/workflow_suite_contract.rs` holds the workflow and manifest contracts,
+`tests/workflow_suite/reader_cases.rs` the cases that drive the readers, and
+`tests/workflow_suite/make_probe.rs` the comparison with GNU make. In that last
+module the probe (`make_version`), the decision (`require_gnu_make`, which
+returns a `Skip` reason as an error) and the report (`report_skip`, which
+writes to a writer the caller supplies) are separate units, each tested on its
+own.
+
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single
