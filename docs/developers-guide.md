@@ -84,6 +84,15 @@ returns a `Skip` reason as an error) and the report (`report_skip`, which
 writes to a writer the caller supplies) are separate units, each tested on its
 own.
 
+`tests/workflow_suite/properties.rs` holds the exhaustive bounded checks that
+stand in for generated property tests: a suite command is found after every
+harmless command, joiner and prefix; two harmless commands are never a suite
+run; single-quoted text never adds one; and the default goal equals a reference
+fold of every sequence of up to three assignments. `make_probe.rs` compares the
+reader with real GNU make over the same sequences. The vocabularies are small
+and closed, so enumeration is complete and needs no generator or extra
+dependency.
+
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single

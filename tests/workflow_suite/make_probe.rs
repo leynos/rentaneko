@@ -319,3 +319,29 @@ fn make_refuses_several_words_and_the_reader_does_not_read_them() {
     );
     assert_eq!(default_goal_of(makefile), "build");
 }
+
+/// The reader agrees with GNU make over every sequence of up to three
+/// `.DEFAULT_GOAL` assignments, so the behaviour is pinned to make exhaustively
+/// and not to a sample. A sequence make refuses (several words) is skipped
+/// here and covered by the several-words case above.
+#[test]
+fn the_reader_agrees_with_gnu_make_on_every_bounded_sequence() {
+    if stop_without_gnu_make().expect("stderr must be writable") {
+        return;
+    }
+    let mut disagreements = Vec::new();
+    for operations in super::properties::sequences(3) {
+        let text = super::properties::makefile(&operations);
+        let probe = make_default_goal(&text).expect("make must run");
+        if let Some(by_make) = probe.goal
+            && default_goal_of(&text) != by_make
+        {
+            disagreements.push((text, by_make));
+        }
+    }
+    assert!(
+        disagreements.is_empty(),
+        "the reader disagrees with make on {:?}",
+        disagreements.iter().take(3).collect::<Vec<_>>()
+    );
+}
