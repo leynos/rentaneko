@@ -43,7 +43,7 @@ jobs:
         with:
           globs: '**/*.md'
       - name: Setup uv
-        uses: astral-sh/setup-uv@421feb646df5262e7dd93bc54161edfa30372417
+        uses: astral-sh/setup-uv@a96208bed1fb5efb8da349c9bcc6cc58af9e7d74
         with:
           python-version: '3.14'
       - name: Spelling
