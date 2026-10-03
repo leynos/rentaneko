@@ -110,6 +110,17 @@ takes the standard flags. `tests/build_standard_contract.rs` holds the
 configuration sources and those recipes to this. Coverage generation uses `lld`
 because LLVM coverage tooling expects LLVM-compatible linker behaviour.
 
+CI runs the doctests outside the Makefile, in a standalone `Run doctests` step
+of `ci.yml` that calls `cargo test --doc` directly, so the Makefile's
+`STANDARD_RUSTFLAGS` cannot reach it. The step therefore assigns its own
+`RUSTFLAGS` with `-D warnings`, the frontend flag and the Linux linker flag,
+because an assigned `RUSTFLAGS` replaces every `rustflags` source in
+`.cargo/config.toml`. Development builds default to Cranelift, which cannot
+instrument coverage, so `make coverage` also sets
+`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm` on the `cargo llvm-cov` command itself.
+`tests/build_standard_contract.rs` reads both: the doctest step's flags, and
+the coverage command's backend selection, and fails if either is dropped.
+
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
 full generated workflow locally on Linux.
 
