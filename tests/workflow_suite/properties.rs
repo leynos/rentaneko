@@ -166,7 +166,7 @@ pub(super) fn makefile(operations: &[Operation]) -> String {
 
 /// Returns `.DEFAULT_GOAL` after the operations, applied as make applies them,
 /// or `None` where it holds several words.
-fn reference(operations: &[Operation]) -> Option<String> {
+pub(super) fn reference(operations: &[Operation]) -> Option<String> {
     let mut goal = String::new();
     for (operator, value) in operations {
         match *operator {
