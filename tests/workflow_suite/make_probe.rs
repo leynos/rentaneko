@@ -136,11 +136,37 @@ fn make_refuses_several_words_and_the_reader_does_not_read_them() {
     assert_eq!(default_goal_of(makefile), "build");
 }
 
+/// Returns a note where the reader and make disagree about a fixture, else
+/// `None`. `goal` is what make settled on, or `None` where it refused;
+/// `reference` is the reference fold's goal for the same assignments;
+/// `by_reader` is what the reader returned; `diagnostic` is make's stderr.
+///
+/// A refusal is only expected where the reference fold also reads no single
+/// goal (several words), and then the reader must fall back to `build`. A
+/// refusal in any other shape means the reader or the probe is wrong, which is
+/// reachable only through such a bug, so the shapes are tested directly below.
+fn disagreement(
+    goal: Option<&str>,
+    reference: Option<&str>,
+    by_reader: &str,
+    diagnostic: &str,
+) -> Option<String> {
+    match goal {
+        Some(by_make) if by_reader != by_make => {
+            Some(format!("make says {by_make}, the reader says {by_reader}"))
+        }
+        Some(_) => None,
+        None if reference.is_none() && by_reader == "build" => None,
+        None => Some(format!(
+            "make refused a fixture the reference accepts or the reader misreads: {diagnostic}"
+        )),
+    }
+}
+
 /// The reader agrees with GNU make over every sequence of up to three
 /// `.DEFAULT_GOAL` assignments, so the behaviour is pinned to make exhaustively
 /// and not to a sample. A sequence make refuses must be one the reference fold
-/// also reads as having no single goal, with the reader falling back to the
-/// first rule; any other refusal is a disagreement.
+/// also reads as having no single goal; any other refusal is a disagreement.
 #[test]
 fn the_reader_agrees_with_gnu_make_on_every_bounded_sequence() {
     if stop_without_gnu_make().expect("stderr must be writable") {
@@ -150,21 +176,56 @@ fn the_reader_agrees_with_gnu_make_on_every_bounded_sequence() {
     for operations in super::properties::sequences(3) {
         let text = super::properties::makefile(&operations);
         let probe = make_default_goal(&text).expect("make must run");
-        let by_reader = default_goal_of(&text);
-        match probe.goal {
-            Some(by_make) if by_reader != by_make => disagreements.push((text, by_make)),
-            Some(_) => {}
-            // Make refuses only a goal of several words, which the reference
-            // fold also reads as none and the reader falls back to `build` for.
-            None if super::properties::reference(&operations).is_none() && by_reader == "build" => {
-            }
-            None => disagreements.push((text, format!("refused: {}", probe.diagnostic))),
+        let reference = super::properties::reference(&operations);
+        if let Some(note) = disagreement(
+            probe.goal.as_deref(),
+            reference.as_deref(),
+            &default_goal_of(&text),
+            &probe.diagnostic,
+        ) {
+            disagreements.push((text, note));
         }
     }
     assert!(
         disagreements.is_empty(),
         "the reader disagrees with make on {:?}",
         disagreements.iter().take(3).collect::<Vec<_>>()
+    );
+}
+
+/// The decision is exercised directly, without the reader or make, so each
+/// shape it can meet is held, including the refusals only a bug could produce.
+#[rstest]
+#[case::agree(Some("a"), Some("a"), "a", None)]
+#[case::differ(Some("a"), Some("a"), "b", Some("make says a, the reader says b"))]
+#[case::expected_refusal(None, None, "build", None)]
+#[case::refusal_the_reference_accepts(
+    None,
+    Some("a"),
+    "a",
+    Some("make refused a fixture the reference accepts or the reader misreads: why")
+)]
+#[case::refusal_the_reference_accepts_with_a_build_fallback(
+    None,
+    Some("a"),
+    "build",
+    Some("make refused a fixture the reference accepts or the reader misreads: why")
+)]
+#[case::refusal_with_the_wrong_fallback(
+    None,
+    None,
+    "test",
+    Some("make refused a fixture the reference accepts or the reader misreads: why")
+)]
+fn a_disagreement_is_named_for_every_shape(
+    #[case] goal: Option<&str>,
+    #[case] reference: Option<&str>,
+    #[case] by_reader: &str,
+    #[case] expected: Option<&str>,
+) {
+    assert_eq!(
+        disagreement(goal, reference, by_reader, "why").as_deref(),
+        expected
     );
 }
 
