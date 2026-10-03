@@ -54,6 +54,45 @@ only where that goal runs the suite. Extend the readers by adding a spelling
 case to the contract, and prove it with a mutation of `ci.yml` that the
 previous reader missed.
 
+A bare `make` runs the Makefile's default goal, so the suite-once contract
+reads that goal from the Makefile (`default_goal_of` in
+`tests/workflow_suite/reading.rs`). It applies the `.DEFAULT_GOAL` assignments
+in order, as GNU make does (manual, "Other Special Variables"). `=` and `:=`
+replace the value, so the last one wins. `?=` changes nothing, because make
+defines `.DEFAULT_GOAL` itself, empty, before it reads a makefile. `+=` appends
+a word, and an empty `+=` keeps the current value. An empty `=` or `:=`
+assignment clears the value. A value of several words, which make refuses, is
+not read, and the reader falls back to the first rule that is not a special or
+pattern target. A tab-indented line is recipe text, not an assignment. The
+reader keeps each right-hand side as written and does not expand variable
+references, so `.DEFAULT_GOAL = $(GOAL)` reads as `$(GOAL)` where make would
+expand it; the fixtures that pin the reader to make use literal goals.
+
+`the_reader_agrees_with_gnu_make` pins this to make itself and not to a reading
+of its manual. It runs `make -f - -pn` on each fixture and compares the goal
+make settles on (the `.DEFAULT_GOAL` line of the variable database) with the
+reader's. The test is compiled on Linux only. It needs GNU make on `PATH` and
+skips, printing the reason, on a host where `make` is absent or is not GNU
+make. CI runs it on Linux, where GNU make is the make in use.
+
+The contract is split so each file stays under 400 lines:
+`tests/workflow_suite_contract.rs` holds the workflow and manifest contracts,
+`tests/workflow_suite/reader_cases.rs` the cases that drive the readers, and
+`tests/workflow_suite/make_probe.rs` the comparison with GNU make. In that last
+module the probe (`make_version`), the decision (`require_gnu_make`, which
+returns a `Skip` reason as an error) and the report (`report_skip`, which
+writes to a writer the caller supplies) are separate units, each tested on its
+own.
+
+`tests/workflow_suite/properties.rs` holds the exhaustive bounded checks that
+stand in for generated property tests: a suite command is found after every
+harmless command, joiner and prefix; two harmless commands are never a suite
+run; single-quoted text never adds one; and the default goal equals a reference
+fold of every sequence of up to three assignments. `make_probe.rs` compares the
+reader with real GNU make over the same sequences. The vocabularies are small
+and closed, so enumeration is complete and needs no generator or extra
+dependency.
+
 ## Prototype API Boundaries
 
 The prototype API is constructor-shaped. `Simulator::start` is the single
