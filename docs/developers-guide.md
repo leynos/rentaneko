@@ -45,14 +45,15 @@ second time and was removed. The crate declares no features, so `make test`'s
 The contract reads workflows through the readers in
 `tests/workflow_suite/reading.rs` (`Command`, `Workflow`, `Job`, `Step` and
 `Manifest`) and `tests/workflow_suite/shell.rs`, which splits a command the way
-the shell does and decides whether it runs the suite. The readers belong to
-`tests/workflow_suite_contract.rs` alone: no other test calls them, and no
-production code depends on them. Callers ask a value what it holds (a job for
-its steps, a step for its condition, a command whether it runs the suite) and
-pass the Makefile's default goal in, so a bare `make` counts as a suite run
-only where that goal runs the suite. Extend the readers by adding a spelling
-case to the contract, and prove it with a mutation of `ci.yml` that the
-previous reader missed.
+the shell does and decides whether it runs the suite. The readers are private
+to the `workflow_suite_contract` integration-test crate: its `reader_cases`,
+`properties` and Linux-only `make_probe` modules call them, no other test does,
+and no production code depends on them. Callers ask a value what it holds (a
+job for its steps, a step for its condition, a command whether it runs the
+suite) and pass the Makefile's default goal in, so a bare `make` counts as a
+suite run only where that goal runs the suite. Extend the readers by adding a
+spelling case to the contract, and prove it with a mutation of `ci.yml` that
+the previous reader missed.
 
 A bare `make` runs the Makefile's default goal, so the suite-once contract
 reads that goal from the Makefile (`default_goal_of` in
@@ -73,7 +74,10 @@ of its manual. It runs `make -f - -pn` on each fixture and compares the goal
 make settles on (the `.DEFAULT_GOAL` line of the variable database) with the
 reader's. The test is compiled on Linux only. It needs GNU make on `PATH` and
 skips, printing the reason, on a host where `make` is absent or is not GNU
-make. CI runs it on Linux, where GNU make is the make in use.
+make. CI runs it on Linux, where GNU make is the make in use. The probe removes
+`MAKEFLAGS`, `GNUMAKEFLAGS` and `MAKELEVEL` from make's environment first: a
+`-q` in any of them makes make exit non-zero for a target that needs updating,
+and an accepted fixture would read as refused.
 
 The contract is split so each file stays under 400 lines:
 `tests/workflow_suite_contract.rs` holds the workflow and manifest contracts,

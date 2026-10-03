@@ -30,15 +30,38 @@ struct GoalProbe {
 ///
 /// Returns the error raised starting `make` or feeding it the fixture.
 fn make_default_goal(makefile: &str) -> std::io::Result<GoalProbe> {
+    make_default_goal_in(makefile, &[])
+}
+
+/// Make's own flag variables, which the probe must not inherit: a `-q` in any
+/// of them makes make exit non-zero when a target needs updating, which would
+/// read as a refused fixture.
+const INHERITED_FLAGS: [&str; 3] = ["MAKEFLAGS", "GNUMAKEFLAGS", "MAKELEVEL"];
+
+/// Runs the probe with `environment` set on the child first, then removes
+/// [`INHERITED_FLAGS`], so a test can prove an inherited flag has no effect.
+/// The environment is the child's alone; the test process is never mutated.
+///
+/// # Errors
+///
+/// Returns the error raised starting `make` or feeding it the fixture.
+fn make_default_goal_in(
+    makefile: &str,
+    environment: &[(&str, &str)],
+) -> std::io::Result<GoalProbe> {
     use std::{
         io::Write as _,
         process::{Command as Process, Stdio},
     };
 
-    let mut child = Process::new("make")
+    let mut command = Process::new("make");
+    command
         .args(["-f", "-", "-pn"])
-        .env_remove("MAKEFLAGS")
-        .env_remove("MAKELEVEL")
+        .envs(environment.iter().copied());
+    for flag in INHERITED_FLAGS {
+        command.env_remove(flag);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -344,4 +367,19 @@ fn the_reader_agrees_with_gnu_make_on_every_bounded_sequence() {
         "the reader disagrees with make on {:?}",
         disagreements.iter().take(3).collect::<Vec<_>>()
     );
+}
+
+/// A `-q` in make's flag variables must not change what the probe reads: with
+/// it, make would exit non-zero for a target that needs updating and the
+/// fixture would read as refused.
+#[rstest]
+#[case::makeflags("MAKEFLAGS")]
+#[case::gnumakeflags("GNUMAKEFLAGS")]
+fn an_inherited_question_flag_does_not_hide_the_goal(#[case] variable: &str) {
+    if stop_without_gnu_make().expect("stderr must be writable") {
+        return;
+    }
+    let makefile = "build:\n\t@echo built\ntest:\n";
+    let probe = make_default_goal_in(makefile, &[(variable, "-q")]).expect("make must run");
+    assert_eq!(probe.goal.as_deref(), Some("build"), "{}", probe.diagnostic);
 }
