@@ -10,9 +10,10 @@
 
 use super::{make_probe::INHERITED_FLAGS, make_skip::stop_without_gnu_make};
 
-/// Runs this test binary as a child with `search_path` as its `PATH` (or its own when
-/// `None`) and `filter` as the only test selection, returning its output. The
-/// environment is the child's alone; the test process is never mutated.
+/// Runs this test binary as a child with `search_path` as its `PATH` (or its own
+/// when `None`) and [`make_backed_selection`] as the only test selection,
+/// returning its output. The environment is the child's alone; the test process
+/// is never mutated.
 ///
 /// # Errors
 ///
