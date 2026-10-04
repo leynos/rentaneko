@@ -21,7 +21,11 @@ host and the compilation target are Linux. `make release` adds neither flag and
 passes your `RUSTFLAGS` through. To build for another target, set
 `CARGO_BUILD_TARGET` (`host-tuple` means the host's own triple); a `--target` in
 `CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` stops the targets with an error,
-because Make cannot read it.
+because Make cannot read it, on any host.
+
+`make coverage` assigns its own `RUSTFLAGS`: it does not keep an exported value
+and adds neither standard flag, and it builds on LLVM because
+`-Cinstrument-coverage` is LLVM-only.
 
 ## Makefile Targets
 

@@ -151,10 +151,13 @@ set) are Linux; `CARGO_BUILD_TARGET=host-tuple` names the host's own triple, so
 it counts as the host. Make reads the target from that variable alone, so a
 `--target` in `CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` makes the
 development targets stop with an error telling the caller to set
-`CARGO_BUILD_TARGET` instead. `make release` assigns the inherited `RUSTFLAGS`,
-which is empty when the caller exports none (a bare `cargo build --release`
-still takes both flags, because Cargo does not select `rustflags` by profile)
-and coverage assigns its own, so neither takes the standard flags.
+`CARGO_BUILD_TARGET` instead, on any host, whether or not `mold` would apply.
+The recipes put an inherited `RUSTFLAGS` first, ahead of the flags they append,
+and the contract checks that order over generated sequences of caller flags with
+`proptest`. `make release` assigns the inherited `RUSTFLAGS`, which is empty
+when the caller exports none (a bare `cargo build --release` still takes both
+flags, because Cargo does not select `rustflags` by profile) and coverage
+assigns its own, so neither takes the standard flags.
 `tests/build_standard_contract.rs` holds the configuration sources and those
 recipes to this. Coverage generation holds the development profile on LLVM,
 because `-Cinstrument-coverage` is LLVM-only and the development profile

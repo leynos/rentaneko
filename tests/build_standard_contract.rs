@@ -115,10 +115,11 @@ impl Flags {
     /// Returns whether the list names one flag.
     fn names(&self, flag: &str) -> bool { self.0.iter().any(|candidate| candidate == flag) }
 
-    /// Returns whether the list holds the caller's words as one unbroken run.
-    fn carries_run(&self, caller: &str) -> bool {
+    /// Returns whether the list begins with the caller's words, in order, so the
+    /// recipe's own flags come after the inherited ones.
+    fn leads_with(&self, caller: &str) -> bool {
         let wanted = Self::from_words(&caller.split_whitespace().collect::<Vec<_>>()).0;
-        wanted.is_empty() || self.0.windows(wanted.len()).any(|run| run == wanted)
+        self.0.starts_with(&wanted)
     }
 
     /// Returns the list without the linker flag, for comparing sources.
@@ -269,7 +270,7 @@ fn check_development_targets(host: Host, inherited: Option<&str>) -> Read<Vec<St
                     "`make {target}` on {host:?} gets mold wrong: {flags:?}"
                 ));
             }
-            if inherited.is_some_and(|caller| !flags.carries_run(caller)) {
+            if inherited.is_some_and(|caller| !flags.leads_with(caller)) {
                 problems.push(format!(
                     "`make {target}` drops the caller's RUSTFLAGS: {flags:?}"
                 ));

@@ -27,8 +27,9 @@ BUILD_HOST_OS := $(shell uname -s)
 # target from that variable alone, so a `--target` in the flag variables, which
 # it cannot see, is an error rather than a silent assumption of a Linux target.
 STANDARD_CLI_TARGETS = $(filter --target --target=%,$(CARGO_FLAGS) $(TEST_FLAGS) $(CLIPPY_FLAGS))
-STANDARD_TARGET_IS_LINUX = $(if $(STANDARD_CLI_TARGETS),$(error `--target` in CARGO_FLAGS, TEST_FLAGS or CLIPPY_FLAGS is not read by Make: set CARGO_BUILD_TARGET instead),$(if $(CARGO_BUILD_TARGET),$(or $(findstring -linux-,$(CARGO_BUILD_TARGET)),$(filter host-tuple,$(CARGO_BUILD_TARGET))),yes))
-STANDARD_RUSTFLAGS = $(STANDARD_THREADS_FLAG)$(if $(filter Linux,$(BUILD_HOST_OS)),$(if $(STANDARD_TARGET_IS_LINUX), $(STANDARD_MOLD_FLAG)))
+STANDARD_TARGET_GUARD = $(if $(STANDARD_CLI_TARGETS),$(error `--target` in CARGO_FLAGS, TEST_FLAGS or CLIPPY_FLAGS is not read by Make: set CARGO_BUILD_TARGET instead))
+STANDARD_TARGET_IS_LINUX = $(if $(CARGO_BUILD_TARGET),$(or $(findstring -linux-,$(CARGO_BUILD_TARGET)),$(filter host-tuple,$(CARGO_BUILD_TARGET))),yes)
+STANDARD_RUSTFLAGS = $(STANDARD_TARGET_GUARD)$(STANDARD_THREADS_FLAG)$(if $(filter Linux,$(BUILD_HOST_OS)),$(if $(STANDARD_TARGET_IS_LINUX), $(STANDARD_MOLD_FLAG)))
 # Release builds take neither flag: assigning `RUSTFLAGS`, even to an empty
 # inherited value, displaces every `rustflags` source in the configuration.
 RELEASE_RUSTFLAGS = RUSTFLAGS="$${RUSTFLAGS-}"

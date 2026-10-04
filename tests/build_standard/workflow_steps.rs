@@ -81,39 +81,42 @@ fn the_coverage_recipe_selects_llvm() {
     );
 }
 
-/// Runs `make -n TARGET` as a Linux host with `variable` set to `value`.
-fn dry_run_with(target: &str, variable: &str, value: &str) -> std::io::Result<Output> {
+/// Runs `make -n TARGET` as `host` with `variable` set to `value`.
+fn dry_run_with(host: &str, target: &str, variable: &str, value: &str) -> std::io::Result<Output> {
     Command::new("make")
-        .args(["-n", "-B", "BUILD_HOST_OS=Linux", target])
+        .args(["-n", "-B", &format!("BUILD_HOST_OS={host}"), target])
         .arg(format!("{variable}={value}"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
 }
 
 /// A `--target` in any flag variable, in either spelling, stops each development
-/// target with a message naming `CARGO_BUILD_TARGET`.
+/// target with a message naming `CARGO_BUILD_TARGET`, on a Linux host and on a
+/// macOS host alike: the guard does not depend on whether mold would apply.
 #[test]
 fn a_target_in_the_flag_variables_is_an_error() {
-    for (target, variable, value) in [
-        ("typecheck", "CARGO_FLAGS", "--target aarch64-apple-darwin"),
-        ("test", "TEST_FLAGS", "--target=aarch64-apple-darwin"),
-        (
-            "lint",
-            "CLIPPY_FLAGS",
-            "--all-targets --target aarch64-apple-darwin",
-        ),
-        ("build", "CARGO_FLAGS", "--target=x86_64-unknown-linux-gnu"),
-    ] {
-        let output = dry_run_with(target, variable, value).expect("run `make -n`");
-        assert!(
-            !output.status.success(),
-            "`make {target} {variable}='{value}'` was accepted"
-        );
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains("set CARGO_BUILD_TARGET instead"),
-            "`make {target}` did not name CARGO_BUILD_TARGET: {stderr}"
-        );
+    for host in ["Linux", "Darwin"] {
+        for (target, variable, value) in [
+            ("typecheck", "CARGO_FLAGS", "--target aarch64-apple-darwin"),
+            ("test", "TEST_FLAGS", "--target=aarch64-apple-darwin"),
+            (
+                "lint",
+                "CLIPPY_FLAGS",
+                "--all-targets --target aarch64-apple-darwin",
+            ),
+            ("build", "CARGO_FLAGS", "--target=x86_64-unknown-linux-gnu"),
+        ] {
+            let output = dry_run_with(host, target, variable, value).expect("run `make -n`");
+            assert!(
+                !output.status.success(),
+                "`make {target} {variable}='{value}'` was accepted on {host}"
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("set CARGO_BUILD_TARGET instead"),
+                "`make {target}` on {host} did not name CARGO_BUILD_TARGET: {stderr}"
+            );
+        }
     }
 }
 
@@ -125,7 +128,7 @@ fn flags_that_only_resemble_a_target_are_accepted() {
         ("CARGO_FLAGS", "--all-targets --target-dir /tmp/x"),
         ("TEST_FLAGS", "--all-targets --all-features"),
     ] {
-        let output = dry_run_with("typecheck", variable, value).expect("run `make -n`");
+        let output = dry_run_with("Linux", "typecheck", variable, value).expect("run `make -n`");
         assert!(
             output.status.success(),
             "`{variable}='{value}'` was rejected: {}",
@@ -134,23 +137,44 @@ fn flags_that_only_resemble_a_target_are_accepted() {
     }
 }
 
-/// Preserving a caller's `RUSTFLAGS` holds for any value, not one sample: a
-/// single flag, several flags, a `-C` pair, quoted-looking text, a deny list
-/// and a standard flag the caller already carries all survive composition.
-#[test]
-fn development_targets_keep_a_range_of_inherited_values() {
-    for caller in [
-        "",
-        "--cfg one",
-        "--cfg one --cfg two",
-        "-C target-cpu=native",
-        "-D warnings -W unused",
-        "--cfg feature=\"x\"",
-        "-Zthreads=4",
-        "--cfg a -C link-arg=-Wl,--gc-sections --cfg b",
-    ] {
-        let problems =
-            check_development_targets(Host::Linux, Some(caller)).expect("read `make -n` output");
-        assert!(problems.is_empty(), "inherited {caller:?}: {problems:#?}");
+/// Complete flags a caller might export: each is one or more words that stand
+/// together, so any sequence of them is a valid `RUSTFLAGS`.
+const CALLER_FLAGS: [&str; 5] = [
+    "--cfg one",
+    "--cfg feature=\"x\"",
+    "-C target-cpu=native",
+    "-C link-arg=-Wl,--gc-sections",
+    "-D warnings",
+];
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(24))]
+
+    /// For any sequence of caller flags (including none, repeats, and `-C value`
+    /// pairs), every development command assigns a `RUSTFLAGS` that begins with
+    /// the caller's words in order, before the flags the recipe appends, and
+    /// still carries the frontend flag.
+    #[test]
+    fn development_targets_lead_with_any_inherited_sequence(
+        flags in proptest::collection::vec(proptest::sample::select(CALLER_FLAGS.to_vec()), 0..4)
+    ) {
+        let caller = flags.join(" ");
+        let problems = check_development_targets(Host::Linux, Some(&caller))
+            .expect("read `make -n` output");
+        proptest::prop_assert!(problems.is_empty(), "inherited {caller:?}: {problems:#?}");
     }
+}
+
+/// The order check itself: a list leads with the caller's words only when they
+/// come first and in order, so a recipe that appends its flags before the
+/// inherited ones, or reorders them, fails even though every word is present.
+#[test]
+fn leading_with_the_callers_flags_requires_them_first_and_in_order() {
+    let assigned = Flags::from_words(&["--cfg", "a", "-C", "x=1", "-Zthreads=8"]);
+    assert!(assigned.leads_with("--cfg a -C x=1"));
+    assert!(assigned.leads_with(""));
+    assert!(!assigned.leads_with("-C x=1"), "a later run is not a lead");
+    assert!(!assigned.leads_with("-C x=1 --cfg a"), "order matters");
+    let appended_first = Flags::from_words(&["-Zthreads=8", "--cfg", "a"]);
+    assert!(!appended_first.leads_with("--cfg a"));
 }
