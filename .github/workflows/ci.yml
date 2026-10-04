@@ -95,12 +95,13 @@ jobs:
           format: lcov
       # The doctests are the only part of `make test` the coverage step does
       # not run. The step denies warnings as `make test`'s doctest line does;
-      # the build standard's frontend and linker flags are a local build-speed
-      # default and change no result, so CI does not restate them.
+      # the step restates the build standard's frontend and linker flags beside
+      # the warning denial, because an assigned RUSTFLAGS replaces every
+      # `rustflags` source in `.cargo/config.toml`.
       # tests/workflow_suite_contract.rs holds the split.
       - name: Run doctests
         env:
-          RUSTFLAGS: -D warnings
+          RUSTFLAGS: -D warnings -Zthreads=8 -Clink-arg=-fuse-ld=mold
         run: cargo test --doc --workspace --all-features
       - name: Upload coverage data to CodeScene
         env:
