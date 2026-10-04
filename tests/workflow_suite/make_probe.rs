@@ -252,12 +252,53 @@ fn an_inherited_question_flag_does_not_hide_the_goal(#[case] variable: &str) {
 ///
 /// Returns the error raised locating or starting the test binary.
 fn run_self(search_path: Option<&str>, filter: &str) -> std::io::Result<std::process::Output> {
-    let mut command = std::process::Command::new(std::env::current_exe()?);
+    child_command(std::env::current_exe()?, search_path, filter).output()
+}
+
+/// Builds the child command: the test binary at `program`, running only
+/// `filter`, with `search_path` as its `PATH` when given and without the make
+/// flag variables a parent `make test` may pass down (a jobserver entry in
+/// `MAKEFLAGS` names descriptors the child does not hold), so the child-run
+/// tests do not depend on the parent's make context.
+fn child_command(
+    program: std::path::PathBuf,
+    search_path: Option<&str>,
+    filter: &str,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
     command.args([filter, "--nocapture"]);
+    for flag in INHERITED_FLAGS {
+        command.env_remove(flag);
+    }
     if let Some(directories) = search_path {
         command.env("PATH", directories);
     }
-    command.output()
+    command
+}
+
+/// The child inherits none of make's flag variables, whatever the parent
+/// carries, and sets `PATH` only when asked.
+#[test]
+fn the_child_run_drops_make_flags_and_sets_only_the_requested_path() {
+    let command = child_command("test-binary".into(), Some("/nowhere"), "filter");
+    let envs: Vec<_> = command.get_envs().collect();
+    for flag in INHERITED_FLAGS {
+        assert!(
+            envs.iter()
+                .any(|(name, value)| *name == flag && value.is_none()),
+            "{flag} must be removed from the child's environment: {envs:?}"
+        );
+    }
+    assert!(
+        envs.iter().any(|(name, value)| *name == "PATH"
+            && value.is_some_and(|directories| directories == "/nowhere")),
+        "PATH must be set for the child: {envs:?}"
+    );
+    let inherited = child_command("test-binary".into(), None, "filter");
+    assert!(
+        inherited.get_envs().all(|(name, _)| name != "PATH"),
+        "PATH must be left alone when none is requested"
+    );
 }
 
 /// Returns how many tests the child reported passing.
