@@ -147,14 +147,15 @@ as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`, adding them to
 any `RUSTFLAGS` the recipe inherits (setup-rust exports one in CI) rather than
 replacing it; every `lint` command assigns it too. The Makefile adds `mold`
 only when both the host and the compilation target (`CARGO_BUILD_TARGET`, when
-set) are Linux. `make release` assigns an empty inherited `RUSTFLAGS` (a bare
-`cargo build --release` still takes both flags, because Cargo does not select
-`rustflags` by profile) and coverage assigns its own, so neither takes the
-standard flags. `tests/build_standard_contract.rs` holds the configuration
-sources and those recipes to this. Coverage generation holds the development
-profile on LLVM, because `-Cinstrument-coverage` is LLVM-only and the
-development profile selects Cranelift, and uses `lld` because LLVM coverage
-tooling expects LLVM-compatible linker behaviour.
+set) are Linux. `make release` assigns the inherited `RUSTFLAGS`, which is
+empty when the caller exports none (a bare `cargo build --release` still takes
+both flags, because Cargo does not select `rustflags` by profile) and coverage
+assigns its own, so neither takes the standard flags.
+`tests/build_standard_contract.rs` holds the configuration sources and those
+recipes to this. Coverage generation holds the development profile on LLVM,
+because `-Cinstrument-coverage` is LLVM-only and the development profile
+selects Cranelift, and uses `lld` because LLVM coverage tooling expects
+LLVM-compatible linker behaviour.
 
 CI runs the doctests outside the Makefile, in a standalone `Run doctests` step
 of `ci.yml` that calls `cargo test --doc` directly, so the Makefile's

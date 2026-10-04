@@ -24,7 +24,7 @@ BUILD_HOST_OS := $(shell uname -s)
 # mold is added only when the machine doing the build is Linux (only Make can
 # tell whether it has mold) and the compilation target is Linux too, which is
 # the host unless `CARGO_BUILD_TARGET` names another triple.
-STANDARD_TARGET_IS_LINUX = $(if $(CARGO_BUILD_TARGET),$(findstring -linux-,$(CARGO_BUILD_TARGET)),yes)
+STANDARD_TARGET_IS_LINUX = $(if $(CARGO_BUILD_TARGET),$(or $(findstring -linux-,$(CARGO_BUILD_TARGET)),$(filter host-tuple,$(CARGO_BUILD_TARGET))),yes)
 STANDARD_RUSTFLAGS = $(STANDARD_THREADS_FLAG)$(if $(filter Linux,$(BUILD_HOST_OS)),$(if $(STANDARD_TARGET_IS_LINUX), $(STANDARD_MOLD_FLAG)))
 # Release builds take neither flag: assigning `RUSTFLAGS`, even to an empty
 # inherited value, displaces every `rustflags` source in the configuration.

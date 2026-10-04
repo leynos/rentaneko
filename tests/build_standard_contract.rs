@@ -87,7 +87,7 @@ impl Host {
         match self {
             Self::Linux => true,
             Self::Darwin => false,
-            Self::LinuxBuildingFor(triple) => triple.contains("-linux-"),
+            Self::LinuxBuildingFor(triple) => triple.contains("-linux-") || triple == "host-tuple",
         }
     }
 }
@@ -368,6 +368,11 @@ fn development_targets_leave_mold_off_a_non_linux_target() {
             .expect("read `make -n` output");
     problems.extend(
         check_development_targets(Host::LinuxBuildingFor("aarch64-unknown-linux-gnu"), None)
+            .expect("read `make -n` output"),
+    );
+    // Cargo resolves `host-tuple` to the host's own triple, so mold stays.
+    problems.extend(
+        check_development_targets(Host::LinuxBuildingFor("host-tuple"), None)
             .expect("read `make -n` output"),
     );
     assert!(problems.is_empty(), "{problems:#?}");
