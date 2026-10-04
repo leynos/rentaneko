@@ -147,10 +147,14 @@ as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`, adding them to
 any `RUSTFLAGS` the recipe inherits (setup-rust exports one in CI) rather than
 replacing it; every `lint` command assigns it too. The Makefile adds `mold`
 only when both the host and the compilation target (`CARGO_BUILD_TARGET`, when
-set) are Linux. `make release` assigns the inherited `RUSTFLAGS`, which is
-empty when the caller exports none (a bare `cargo build --release` still takes
-both flags, because Cargo does not select `rustflags` by profile) and coverage
-assigns its own, so neither takes the standard flags.
+set) are Linux; `CARGO_BUILD_TARGET=host-tuple` names the host's own triple, so
+it counts as the host. Make reads the target from that variable alone, so a
+`--target` in `CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` makes the
+development targets stop with an error telling the caller to set
+`CARGO_BUILD_TARGET` instead. `make release` assigns the inherited `RUSTFLAGS`,
+which is empty when the caller exports none (a bare `cargo build --release`
+still takes both flags, because Cargo does not select `rustflags` by profile)
+and coverage assigns its own, so neither takes the standard flags.
 `tests/build_standard_contract.rs` holds the configuration sources and those
 recipes to this. Coverage generation holds the development profile on LLVM,
 because `-Cinstrument-coverage` is LLVM-only and the development profile

@@ -1,13 +1,14 @@
-//! The CI workflow and coverage-recipe clauses of the build-standard contract:
-//! the doctest step restates both flags, a step reader stays inside its own
-//! step, and the coverage recipe selects LLVM. It is a module of
-//! `build_standard_contract.rs`, so it shares that file's readers and constants.
+//! The CI workflow and recipe clauses of the build-standard contract: the
+//! doctest step restates both flags, a step reader stays inside its own step,
+//! the coverage recipe selects LLVM, and a `--target` in the flag variables,
+//! which Make cannot read, is an error rather than an assumed Linux target. It is
+//! a module of `build_standard_contract.rs`, so it shares that file's readers.
 
-use std::process::Command;
+use std::process::{Command, Output};
 
 use cap_std::{ambient_authority, fs::Dir};
 
-use super::{Flags, MOLD_FLAG, THREADS_FLAG};
+use super::{Flags, Host, MOLD_FLAG, THREADS_FLAG, check_development_targets, dry_run};
 
 /// Returns the `RUSTFLAGS` a named workflow step assigns.
 ///
@@ -69,12 +70,7 @@ fn the_ci_doctest_step_restates_both_flags() {
 /// Cranelift, so the coverage recipe must select LLVM on the command itself.
 #[test]
 fn the_coverage_recipe_selects_llvm() {
-    let output = Command::new("make")
-        .args(["-n", "-B", "BUILD_HOST_OS=Linux", "coverage"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("run `make -n coverage`");
-    let stdout = String::from_utf8_lossy(&output.stdout).replace("\\\n", " ");
+    let stdout = dry_run("coverage", Host::Linux, None).expect("run `make -n coverage`");
     let line = stdout
         .lines()
         .find(|line| line.contains("llvm-cov"))
@@ -83,4 +79,78 @@ fn the_coverage_recipe_selects_llvm() {
         line.contains("CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm"),
         "the coverage command does not select LLVM: {line}"
     );
+}
+
+/// Runs `make -n TARGET` as a Linux host with `variable` set to `value`.
+fn dry_run_with(target: &str, variable: &str, value: &str) -> std::io::Result<Output> {
+    Command::new("make")
+        .args(["-n", "-B", "BUILD_HOST_OS=Linux", target])
+        .arg(format!("{variable}={value}"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+}
+
+/// A `--target` in any flag variable, in either spelling, stops each development
+/// target with a message naming `CARGO_BUILD_TARGET`.
+#[test]
+fn a_target_in_the_flag_variables_is_an_error() {
+    for (target, variable, value) in [
+        ("typecheck", "CARGO_FLAGS", "--target aarch64-apple-darwin"),
+        ("test", "TEST_FLAGS", "--target=aarch64-apple-darwin"),
+        (
+            "lint",
+            "CLIPPY_FLAGS",
+            "--all-targets --target aarch64-apple-darwin",
+        ),
+        ("build", "CARGO_FLAGS", "--target=x86_64-unknown-linux-gnu"),
+    ] {
+        let output = dry_run_with(target, variable, value).expect("run `make -n`");
+        assert!(
+            !output.status.success(),
+            "`make {target} {variable}='{value}'` was accepted"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("set CARGO_BUILD_TARGET instead"),
+            "`make {target}` did not name CARGO_BUILD_TARGET: {stderr}"
+        );
+    }
+}
+
+/// Flags that merely contain the word are not a target selection, so the guard
+/// does not reject `--target-dir` or `--all-targets`.
+#[test]
+fn flags_that_only_resemble_a_target_are_accepted() {
+    for (variable, value) in [
+        ("CARGO_FLAGS", "--all-targets --target-dir /tmp/x"),
+        ("TEST_FLAGS", "--all-targets --all-features"),
+    ] {
+        let output = dry_run_with("typecheck", variable, value).expect("run `make -n`");
+        assert!(
+            output.status.success(),
+            "`{variable}='{value}'` was rejected: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// Preserving a caller's `RUSTFLAGS` holds for any value, not one sample: a
+/// single flag, several flags, a `-C` pair, quoted-looking text, a deny list
+/// and a standard flag the caller already carries all survive composition.
+#[test]
+fn development_targets_keep_a_range_of_inherited_values() {
+    for caller in [
+        "",
+        "--cfg one",
+        "--cfg one --cfg two",
+        "-C target-cpu=native",
+        "-D warnings -W unused",
+        "--cfg feature=\"x\"",
+        "-Zthreads=4",
+        "--cfg a -C link-arg=-Wl,--gc-sections --cfg b",
+    ] {
+        let problems =
+            check_development_targets(Host::Linux, Some(caller)).expect("read `make -n` output");
+        assert!(problems.is_empty(), "inherited {caller:?}: {problems:#?}");
+    }
 }

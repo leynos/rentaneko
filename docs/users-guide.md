@@ -15,6 +15,14 @@ Development builds use Cranelift for debug code generation. On Linux targets,
 link quickly. Coverage generation uses `lld` instead because LLVM coverage
 tools expect LLVM-compatible linker behaviour.
 
+The `test`, `lint`, `typecheck` and `build` targets keep any `RUSTFLAGS` you
+export and add `-Zthreads=8`, plus the `mold` linker flag when both the build
+host and the compilation target are Linux. `make release` adds neither flag and
+passes your `RUSTFLAGS` through. To build for another target, set
+`CARGO_BUILD_TARGET` (`host-tuple` means the host's own triple); a `--target` in
+`CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` stops the targets with an error,
+because Make cannot read it.
+
 ## Makefile Targets
 
 The generated `Makefile` exposes these public targets:

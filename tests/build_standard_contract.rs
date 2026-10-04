@@ -117,10 +117,8 @@ impl Flags {
 
     /// Returns whether the list holds the caller's words as one unbroken run.
     fn carries_run(&self, caller: &str) -> bool {
-        let wanted: Vec<&str> = caller.split_whitespace().collect();
-        self.0
-            .windows(wanted.len())
-            .any(|run| run.iter().map(String::as_str).eq(wanted.iter().copied()))
+        let wanted = Self::from_words(&caller.split_whitespace().collect::<Vec<_>>()).0;
+        wanted.is_empty() || self.0.windows(wanted.len()).any(|run| run == wanted)
     }
 
     /// Returns the list without the linker flag, for comparing sources.
