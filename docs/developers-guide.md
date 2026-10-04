@@ -47,13 +47,13 @@ The contract reads workflows through the readers in
 `Manifest`) and `tests/workflow_suite/shell.rs`, which splits a command the way
 the shell does and decides whether it runs the suite. The readers are private
 to the `workflow_suite_contract` integration-test crate: its `reader_cases`,
-`properties` and Linux-only `make_probe` and `make_skip` modules call them, no
-other test does, and no production code depends on them. Callers ask a value
-what it holds (a job for its steps, a step for its condition, a command whether
-it runs the suite) and pass the Makefile's default goal in, so a bare `make`
-counts as a suite run only where that goal runs the suite. Extend the readers
-by adding a spelling case to the contract, and prove it with a mutation of
-`ci.yml` that the previous reader missed.
+`properties` and Linux-only `make_probe` modules call them, no other test does,
+and no production code depends on them. Callers ask a value what it holds (a
+job for its steps, a step for its condition, a command whether it runs the
+suite) and pass the Makefile's default goal in, so a bare `make` counts as a
+suite run only where that goal runs the suite. Extend the readers by adding a
+spelling case to the contract, and prove it with a mutation of `ci.yml` that
+the previous reader missed.
 
 A bare `make` runs the Makefile's default goal, so the suite-once contract
 reads that goal from the Makefile (`default_goal_of` in
@@ -87,6 +87,13 @@ sibling `make_skip.rs` the probe (`make_version`), the decision
 (`require_gnu_make`, which returns a `Skip` reason as an error) and the report
 (`report_skip`, which writes to a writer the caller supplies) are separate
 units, each tested on its own.
+
+`make_skip.rs` and `make_child.rs` are Linux-only support for the GNU make
+comparison and do not call the readers. `make_child.rs` runs this test binary
+as a child, with `PATH` naming no `make` or with it present, and requires every
+make-backed test in `make_probe` to skip with its reason or run; the child gets
+none of make's flag variables, and its selection never matches the child-run
+tests, so it cannot recurse; a test holds that.
 
 `tests/workflow_suite/properties.rs` holds the exhaustive bounded checks that
 stand in for generated property tests: a suite command is found after every

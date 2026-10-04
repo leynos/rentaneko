@@ -25,6 +25,9 @@
 
 use rstest::rstest;
 
+#[path = "workflow_suite/make_child.rs"]
+#[cfg(target_os = "linux")]
+mod make_child;
 #[path = "workflow_suite/make_probe.rs"]
 #[cfg(target_os = "linux")]
 mod make_probe;
