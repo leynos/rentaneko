@@ -3,9 +3,10 @@
 //! pinned to make and not to anyone's reading of its manual.
 //!
 //! Linux only, where GNU make is the make in use. The tests skip, writing the
-//! reason to stderr, on a host where `make` is absent or is not GNU make. The
-//! probe, the decision and the report are separate units so each is tested on
-//! its own.
+//! reason to stderr, on a host where `make` is absent or is not GNU make. This
+//! module holds the make comparison (the probe and the pure `disagreement`
+//! decision); availability checks and skip reporting live in `make_skip`, which
+//! it uses.
 
 use rstest::rstest;
 
