@@ -25,9 +25,15 @@
 
 use rstest::rstest;
 
+#[path = "workflow_suite/make_child.rs"]
+#[cfg(target_os = "linux")]
+mod make_child;
 #[path = "workflow_suite/make_probe.rs"]
 #[cfg(target_os = "linux")]
 mod make_probe;
+#[path = "workflow_suite/make_skip.rs"]
+#[cfg(target_os = "linux")]
+mod make_skip;
 #[path = "workflow_suite/properties.rs"]
 mod properties;
 #[path = "workflow_suite/reader_cases.rs"]

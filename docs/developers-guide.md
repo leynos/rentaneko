@@ -45,14 +45,15 @@ second time and was removed. The crate declares no features, so `make test`'s
 The contract reads workflows through the readers in
 `tests/workflow_suite/reading.rs` (`Command`, `Workflow`, `Job`, `Step` and
 `Manifest`) and `tests/workflow_suite/shell.rs`, which splits a command the way
-the shell does and decides whether it runs the suite. The readers belong to
-`tests/workflow_suite_contract.rs` alone: no other test calls them, and no
-production code depends on them. Callers ask a value what it holds (a job for
-its steps, a step for its condition, a command whether it runs the suite) and
-pass the Makefile's default goal in, so a bare `make` counts as a suite run
-only where that goal runs the suite. Extend the readers by adding a spelling
-case to the contract, and prove it with a mutation of `ci.yml` that the
-previous reader missed.
+the shell does and decides whether it runs the suite. The readers are private
+to the `workflow_suite_contract` integration-test crate: its `reader_cases`,
+`properties` and Linux-only `make_probe` modules call them, no other test does,
+and no production code depends on them. Callers ask a value what it holds (a
+job for its steps, a step for its condition, a command whether it runs the
+suite) and pass the Makefile's default goal in, so a bare `make` counts as a
+suite run only where that goal runs the suite. Extend the readers by adding a
+spelling case to the contract, and prove it with a mutation of `ci.yml` that
+the previous reader missed.
 
 A bare `make` runs the Makefile's default goal, so the suite-once contract
 reads that goal from the Makefile (`default_goal_of` in
@@ -73,16 +74,26 @@ of its manual. It runs `make -f - -pn` on each fixture and compares the goal
 make settles on (the `.DEFAULT_GOAL` line of the variable database) with the
 reader's. The test is compiled on Linux only. It needs GNU make on `PATH` and
 skips, printing the reason, on a host where `make` is absent or is not GNU
-make. CI runs it on Linux, where GNU make is the make in use.
+make. CI runs it on Linux, where GNU make is the make in use. The probe removes
+`MAKEFLAGS`, `GNUMAKEFLAGS` and `MAKELEVEL` from make's environment first: a
+`-q` in any of them makes make exit non-zero for a target that needs updating,
+and an accepted fixture would read as refused.
 
 The contract is split so each file stays under 400 lines:
 `tests/workflow_suite_contract.rs` holds the workflow and manifest contracts,
 `tests/workflow_suite/reader_cases.rs` the cases that drive the readers, and
-`tests/workflow_suite/make_probe.rs` the comparison with GNU make. In that last
-module the probe (`make_version`), the decision (`require_gnu_make`, which
-returns a `Skip` reason as an error) and the report (`report_skip`, which
-writes to a writer the caller supplies) are separate units, each tested on its
-own.
+`tests/workflow_suite/make_probe.rs` the comparison with GNU make. In its
+sibling `make_skip.rs` the probe (`make_version`), the decision
+(`require_gnu_make`, which returns a `Skip` reason as an error) and the report
+(`report_skip`, which writes to a writer the caller supplies) are separate
+units, each tested on its own.
+
+`make_skip.rs` and `make_child.rs` are Linux-only support for the GNU make
+comparison and do not call the readers. `make_child.rs` runs this test binary
+as a child, with `PATH` naming no `make` or with it present, and requires every
+make-backed test in `make_probe` to skip with its reason or run; the child gets
+none of make's flag variables, and its selection never matches the child-run
+tests, so it cannot recurse; a test holds that.
 
 `tests/workflow_suite/properties.rs` holds the exhaustive bounded checks that
 stand in for generated property tests: a suite command is found after every
