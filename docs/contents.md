@@ -15,6 +15,8 @@ documentation set.
 - [Roadmap](roadmap.md) sequences the prototype work and deferred extensions.
 - [User guide](users-guide.md) explains how to use the generated project and
   its public build and test commands.
+- [Migrating to composed `RUSTFLAGS`](migrating-to-composed-rustflags.md)
+  lists the caller changes for the build standard's flag composition.
 - [Developer guide](developers-guide.md) explains the local workflow and
   implementation tooling for contributors.
 - [Repository layout](repository-layout.md) explains the generated project's
