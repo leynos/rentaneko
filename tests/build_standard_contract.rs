@@ -19,6 +19,7 @@
 use std::{error::Error, process::Command};
 
 use cap_std::{ambient_authority, fs::Dir};
+use rstest::rstest;
 
 #[path = "build_standard/workflow_steps.rs"]
 mod workflow_steps;
@@ -36,6 +37,11 @@ const LINUX_TABLES: [&str; 2] = ["x86_64-unknown-linux-gnu", "cfg(target_os = \"
 /// assigns `RUSTFLAGS` with the standard flags or assigns none and so takes
 /// the configuration's.
 const DEVELOPMENT_TARGETS: [&str; 4] = ["test", "typecheck", "lint", "build"];
+
+/// Development targets whose cargo and whitaker commands take the shared
+/// `RUST_FLAGS`, so each must carry `-D warnings`. `build` compiles without
+/// the deny list.
+const DENYING_TARGETS: [&str; 3] = ["test", "typecheck", "lint"];
 
 /// Makefile targets that measure or ship, so every command assigns
 /// `RUSTFLAGS` and none carries a standard flag.
@@ -115,6 +121,14 @@ impl Flags {
     /// Returns whether the list names one flag.
     fn names(&self, flag: &str) -> bool { self.0.iter().any(|candidate| candidate == flag) }
 
+    /// Returns whether the list carries `first` immediately followed by `second`,
+    /// as `-D warnings` is spelled.
+    fn names_pair(&self, first: &str, second: &str) -> bool {
+        self.0
+            .windows(2)
+            .any(|pair| matches!(pair, [a, b] if a == first && b == second))
+    }
+
     /// Returns whether the list begins with the caller's words, in order, so the
     /// recipe's own flags come after the inherited ones.
     fn leads_with(&self, caller: &str) -> bool {
@@ -193,6 +207,9 @@ fn dry_run(target: &str, host: Host, inherited: Option<&str>) -> Read<String> {
         .args(host.overrides())
         .arg(target)
         .current_dir(env!("CARGO_MANIFEST_DIR"));
+    // A target the harness inherited would override the host under test; only
+    // `Host::LinuxBuildingFor` selects one, through its command-line override.
+    make.env_remove("CARGO_BUILD_TARGET");
     with_inherited(&mut make, inherited);
     let output = make.output()?;
     if !output.status.success() {
@@ -263,6 +280,11 @@ fn check_development_targets(host: Host, inherited: Option<&str>) -> Read<Vec<St
             if !flags.names(THREADS_FLAG) {
                 problems.push(format!(
                     "`make {target}` on {host:?} drops {THREADS_FLAG}: {flags:?}"
+                ));
+            }
+            if DENYING_TARGETS.contains(&target) && !flags.names_pair("-D", "warnings") {
+                problems.push(format!(
+                    "`make {target}` on {host:?} drops -D warnings: {flags:?}"
                 ));
             }
             if flags.names(MOLD_FLAG) != host.expects_mold() {
@@ -347,10 +369,16 @@ fn development_targets_restate_both_flags_on_linux() {
     }
 }
 
-#[test]
-fn development_targets_keep_the_standard_under_inherited_rustflags() {
-    let problems =
-        check_development_targets(Host::Linux, Some(INHERITED)).expect("read `make -n` output");
+/// Every host and target keeps the caller's `RUSTFLAGS` ahead of the flags the
+/// recipe appends.
+#[rstest]
+#[case::linux(Host::Linux)]
+#[case::darwin(Host::Darwin)]
+#[case::non_linux_target(Host::LinuxBuildingFor("aarch64-apple-darwin"))]
+#[case::linux_target(Host::LinuxBuildingFor("aarch64-unknown-linux-gnu"))]
+#[case::host_tuple(Host::LinuxBuildingFor("host-tuple"))]
+fn development_targets_keep_the_standard_under_inherited_rustflags(#[case] host: Host) {
+    let problems = check_development_targets(host, Some(INHERITED)).expect("read `make -n` output");
     assert!(problems.is_empty(), "{problems:#?}");
 }
 
