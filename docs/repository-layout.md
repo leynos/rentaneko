@@ -17,6 +17,7 @@ compact and omits build output such as `target/`.
 │   ├── dependabot.yml
 │   └── workflows/
 │       ├── ci.yml
+│       ├── coverage-main.yml
 
 ├── docs/
 │   ├── adr-001-use-simulacat-core-for-octocrab-spike.md
@@ -52,6 +53,9 @@ compact and omits build output such as `target/`.
 - `.github/dependabot.yml`: Configures automated dependency update checks.
 - `.github/workflows/ci.yml`: Runs the generated project's continuous
   integration checks.
+- `.github/workflows/coverage-main.yml`: Publishes coverage from `main`,
+  uploading to CodeScene (a missing token is recorded as a notice) and writing
+  the ratchet baseline.
 
 - `docs/`: Holds long-lived reference documentation, guides, style rules, and
   design material.
