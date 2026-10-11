@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@c17d433f99daa94e53ca5eb566088518a312cb71
+        uses: leynos/shared-actions/.github/actions/setup-rust@cabf105ae230e3759cf77b1c2d1d73ea0b67e9a9
         with:
           expect-cache: any
           install-mold: 'true'
