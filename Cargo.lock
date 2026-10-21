@@ -1589,9 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "octocrab"
-version = "0.54.3"
+version = "0.54.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728e29b63bddea1d960d64f3aa7034b7a26d4f5a2406abdf2cc23f697ef9c2cb"
+checksum = "c4a95a2ef78a1956cc22593932b9dcf8fbd8c62328d75d04026d8f0dc71bccae"
 dependencies = [
  "arc-swap",
  "base64 0.22.1",
@@ -2993,9 +2993,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.53.2"
+version = "1.53.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
+checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
 dependencies = [
  "bytes",
  "libc",
