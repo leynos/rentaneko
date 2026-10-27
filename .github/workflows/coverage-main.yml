@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@0f3047d45d1371d8ae700c69e7bed42c4f8862a1
+        uses: leynos/shared-actions/.github/actions/setup-rust@8e6a325765ba382691d1b1c65fcccf1fc1d1b00c
         with:
           expect-cache: any
           install-mold: 'true'
@@ -70,7 +70,7 @@ jobs:
       # content and deadlock auto-merge. The scheduled audit workflow covers
       # Dependabot merges instead.
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@0f3047d45d1371d8ae700c69e7bed42c4f8862a1
+        uses: leynos/shared-actions/.github/actions/generate-coverage@8e6a325765ba382691d1b1c65fcccf1fc1d1b00c
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -C link-arg=-fuse-ld=lld
@@ -88,7 +88,7 @@ jobs:
           with-ratchet: 'true'
       - name: Upload coverage data to CodeScene
         if: github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@0f3047d45d1371d8ae700c69e7bed42c4f8862a1
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@8e6a325765ba382691d1b1c65fcccf1fc1d1b00c
         with:
           path: lcov.info
           format: lcov
