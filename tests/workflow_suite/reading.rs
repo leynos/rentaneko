@@ -287,9 +287,7 @@ impl Manifest {
     /// implicit feature, as Cargo documents, so it is left out.
     pub(crate) fn features(&self) -> Vec<String> {
         let table = self.0.get("features").and_then(toml::Value::as_table);
-        let mut found: Vec<String> = table
-            .map(|t| t.keys().cloned().collect())
-            .unwrap_or_default();
+        let mut found: Vec<String> = table.into_iter().flat_map(|t| t.keys().cloned()).collect();
         let suppressed: Vec<String> = found
             .iter()
             .flat_map(|name| self.feature_values(name))
@@ -309,13 +307,13 @@ impl Manifest {
             .get("features")
             .and_then(|features| features.get(feature))
             .and_then(toml::Value::as_array)
-            .map(|list| {
+            .into_iter()
+            .flat_map(|list| {
                 list.iter()
                     .filter_map(toml::Value::as_str)
                     .map(str::to_owned)
-                    .collect()
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     /// Returns every optional dependency's name, target tables included.
