@@ -108,13 +108,13 @@ fn the_repository_keeps_the_development_footprint_settings() {
         .get("profile")
         .and_then(|profile| profile.get("dev"));
     assert_eq!(
-        dev.and_then(|dev| dev.get("incremental"))
+        dev.and_then(|table| table.get("incremental"))
             .and_then(toml::Value::as_bool),
         Some(false),
         "profile.dev must set incremental = false"
     );
     assert_eq!(
-        dev.and_then(|dev| dev.get("debug"))
+        dev.and_then(|table| table.get("debug"))
             .and_then(toml::Value::as_integer),
         Some(0),
         "profile.dev must set debug = 0"
