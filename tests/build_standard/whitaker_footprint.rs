@@ -104,14 +104,18 @@ fn the_repository_keeps_the_development_footprint_settings() {
             .expect("read Cargo.toml")
             .parse()
             .expect("parse Cargo.toml");
-    let dev = &manifest["profile"]["dev"];
+    let dev = manifest
+        .get("profile")
+        .and_then(|profile| profile.get("dev"));
     assert_eq!(
-        dev["incremental"].as_bool(),
+        dev.and_then(|dev| dev.get("incremental"))
+            .and_then(toml::Value::as_bool),
         Some(false),
         "profile.dev must set incremental = false"
     );
     assert_eq!(
-        dev["debug"].as_integer(),
+        dev.and_then(|dev| dev.get("debug"))
+            .and_then(toml::Value::as_integer),
         Some(0),
         "profile.dev must set debug = 0"
     );
@@ -121,7 +125,10 @@ fn the_repository_keeps_the_development_footprint_settings() {
             .parse()
             .expect("parse .cargo/config.toml");
     assert_eq!(
-        config["unstable"]["embed-metadata"].as_bool(),
+        config
+            .get("unstable")
+            .and_then(|unstable| unstable.get("embed-metadata"))
+            .and_then(toml::Value::as_bool),
         Some(false),
         "[unstable] must set embed-metadata = false"
     );
