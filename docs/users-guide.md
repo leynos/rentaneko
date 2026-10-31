@@ -10,6 +10,11 @@ settings, and documented starter code. Library projects render `src/lib.rs`.
 Application projects render `src/main.rs`, `src/lib.rs`, release automation, and
 `[package.metadata.binstall]` metadata for binary installation.
 
+Default development builds keep no incremental state and no debug information
+(`[profile.dev]` sets `incremental = false` and `debug = 0`), so a debugger
+sees no symbols; set `CARGO_PROFILE_DEV_DEBUG=true` to debug, or
+`CARGO_INCREMENTAL=1` to rebuild incrementally.
+
 Development builds use Cranelift for debug code generation. On Linux targets,
 `.cargo/config.toml` configures clang to link with `mold` so local debug builds
 link quickly. Coverage generation uses `lld` instead because LLVM coverage
@@ -35,7 +40,14 @@ The generated `Makefile` exposes these public targets:
 
 - `make all` runs formatting checks, linting, and tests.
 - `make check-fmt` verifies Rust formatting.
-- `make lint` runs rustdoc, Clippy, and Whitaker with warnings denied.
+- `make lint` runs rustdoc, Clippy, and Whitaker with warnings denied. It is
+  the aggregate of two targets you can run alone: `make lint-clippy` (rustdoc
+  and Clippy, which take the build standard's flags) and `make lint-whitaker`.
+  Whitaker builds with its own installer-managed toolchain, so `lint-whitaker`
+  clears inherited Rust, target, linker, C compiler and backend settings,
+  including `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS` and `CARGO_BUILD_RUSTFLAGS`,
+  and receives the warning policy through `DYLINT_RUSTFLAGS`; it uses the
+  repository's Cargo defaults.
 - `make test` runs `cargo nextest run` when cargo-nextest is installed and
   falls back to `cargo test` otherwise. All projects also run doctests.
 - `make build` builds the debug target.
