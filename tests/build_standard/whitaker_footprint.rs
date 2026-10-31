@@ -103,11 +103,9 @@ fn lint_runs_clippy_and_whitaker() {
 fn the_repository_keeps_the_development_footprint_settings() {
     let root = Dir::open_ambient_dir(env!("CARGO_MANIFEST_DIR"), ambient_authority())
         .expect("open the crate directory");
-    let manifest: toml::Value = root
-        .read_to_string("Cargo.toml")
-        .expect("read Cargo.toml")
-        .parse()
-        .expect("parse Cargo.toml");
+    let manifest: toml::Value =
+        toml::from_str(&root.read_to_string("Cargo.toml").expect("read Cargo.toml"))
+            .expect("parse Cargo.toml");
     let dev = manifest
         .get("profile")
         .and_then(|profile| profile.get("dev"));
@@ -123,11 +121,12 @@ fn the_repository_keeps_the_development_footprint_settings() {
         Some(0),
         "profile.dev must set debug = 0"
     );
-    let config: toml::Value = root
-        .read_to_string(".cargo/config.toml")
-        .expect("read .cargo/config.toml")
-        .parse()
-        .expect("parse .cargo/config.toml");
+    let config: toml::Value = toml::from_str(
+        &root
+            .read_to_string(".cargo/config.toml")
+            .expect("read .cargo/config.toml"),
+    )
+    .expect("parse .cargo/config.toml");
     assert_eq!(
         config
             .get("unstable")
