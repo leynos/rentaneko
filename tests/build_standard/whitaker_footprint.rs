@@ -4,6 +4,8 @@
 //! `.cargo/config.toml`. It is a module of `build_standard_contract.rs`, so it shares that file's
 //! readers.
 
+use cap_std::{ambient_authority, fs::Dir};
+
 use super::{Host, dry_run};
 
 /// Returns the command `make -n lint-whitaker` prints on the host: the line whose program is the
@@ -99,11 +101,13 @@ fn lint_runs_clippy_and_whitaker() {
 /// nightly.
 #[test]
 fn the_repository_keeps_the_development_footprint_settings() {
-    let manifest: toml::Value =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
-            .expect("read Cargo.toml")
-            .parse()
-            .expect("parse Cargo.toml");
+    let root = Dir::open_ambient_dir(env!("CARGO_MANIFEST_DIR"), ambient_authority())
+        .expect("open the crate directory");
+    let manifest: toml::Value = root
+        .read_to_string("Cargo.toml")
+        .expect("read Cargo.toml")
+        .parse()
+        .expect("parse Cargo.toml");
     let dev = manifest
         .get("profile")
         .and_then(|profile| profile.get("dev"));
@@ -119,11 +123,11 @@ fn the_repository_keeps_the_development_footprint_settings() {
         Some(0),
         "profile.dev must set debug = 0"
     );
-    let config: toml::Value =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/.cargo/config.toml"))
-            .expect("read .cargo/config.toml")
-            .parse()
-            .expect("parse .cargo/config.toml");
+    let config: toml::Value = root
+        .read_to_string(".cargo/config.toml")
+        .expect("read .cargo/config.toml")
+        .parse()
+        .expect("parse .cargo/config.toml");
     assert_eq!(
         config
             .get("unstable")
