@@ -28,9 +28,9 @@ Each `Cargo.toml` declares `rust-version = "1.85"`, so `cargo` will refuse to
 compile the project on older compilers. The workspace uses the Rust 2024
 edition.
 
-`rstest-bdd` builds on stable Rust. The repository pins a stable toolchain for
-development via `rust-toolchain.toml` so contributors get consistent `rustfmt`
-and `clippy` behaviour.
+`rstest-bdd` builds on stable Rust. The repository pins a dated nightly
+toolchain for development via `rust-toolchain.toml` so contributors get
+consistent `rustfmt` and `clippy` behaviour.
 
 Step definitions may be synchronous functions (`fn`) or asynchronous functions
 (`async fn`). The framework no longer depends on the `async-trait` crate to
