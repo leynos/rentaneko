@@ -98,3 +98,10 @@ missing_docs                        = "deny"
 
 [lints.rustdoc]
 missing_crate_level_docs            = "deny"
+
+# The development footprint (concordat rule `rust-dev-build-footprint`): no
+# incremental state and no debug information in default development builds.
+# The test profile inherits both.
+[profile.dev]
+incremental = false
+debug = 0

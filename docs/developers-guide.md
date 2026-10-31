@@ -190,6 +190,25 @@ instrument coverage, so `make coverage` also sets
 `tests/build_standard_contract.rs` reads both: the doctest step's flags, and
 the coverage command's backend selection, and fails if either is dropped.
 
+`make lint` runs `lint-clippy` (rustdoc and Clippy, which take the standard's
+flags) and `lint-whitaker`. Whitaker builds with its own installer-managed
+toolchain, which must not inherit the development flags, so the route clears
+inherited `RUSTFLAGS`, encoded flags, backend, target and linker settings
+through `WHITAKER_CLEAN_ENV` and passes the warning policy through
+`DYLINT_RUSTFLAGS`. It neither assigns `RUSTFLAGS` nor selects LLVM, so Cargo's
+repository defaults stay in force. The contract reads `make -n lint-whitaker`
+on a Linux and a macOS host for exactly that, and its Cranelift default means
+the CI Whitaker step provisions the component with `cranelift: 'true'`.
+
+The Concordat `rust-dev-build-footprint` rule keeps default development builds
+small. `Cargo.toml` sets `incremental = false` and `debug = 0` in
+`[profile.dev]`, which the test profile inherits, and `.cargo/config.toml` sets
+`[unstable] embed-metadata = false`, the native Cargo setting for dated
+nightlies from 2026-07-31. The trade-off is that a debugger sees no symbols or
+line tables in a default development build and every rebuild recompiles whole
+crates. To debug, run with `CARGO_PROFILE_DEV_DEBUG=true`; to rebuild
+incrementally, set `CARGO_INCREMENTAL=1`. The contract holds all three settings.
+
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
 full generated workflow locally on Linux.
 
