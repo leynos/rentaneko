@@ -199,10 +199,12 @@ and linker settings, assigns `RUSTFLAGS` the warning policy alone, sets
 through `DYLINT_RUSTFLAGS`. Assigning `RUSTFLAGS` matters: with it unset, Cargo
 still reads the repository's `rustflags` and the route would carry the parallel
 frontend and the `mold` flag. The LLVM override displaces the Cranelift default
-that `.cargo/config.toml` gives the development profile. The contract reads
-`make -n lint-whitaker` on a Linux and a macOS host for exactly that, and the
-CI Whitaker step still provisions the Cranelift component with
-`cranelift: 'true'`.
+that `.cargo/config.toml` gives the development profile, and
+`CARGO_UNSTABLE_CODEGEN_BACKEND=true` opts in the temporary Cargo project where
+Dylint builds its driver, which cannot discover the root configuration that
+enables the unstable profile key. The contract reads `make -n lint-whitaker` on
+a Linux and a macOS host for exactly that, and the CI Whitaker step still
+provisions the Cranelift component with `cranelift: 'true'`.
 
 The Concordat `rust-dev-build-footprint` rule keeps default development builds
 small. `Cargo.toml` sets `incremental = false` and `debug = 0` in

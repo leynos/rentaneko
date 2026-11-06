@@ -63,9 +63,8 @@ fn skip_env_arguments(mut rest: &str) -> &str {
     }
 }
 
-/// Returns the program a shell command executes and the arguments after it: the first word after
-/// any leading assignments and any `env` wrapper with its `-i` and `-u NAME` options and its own
-/// assignments. A word that only appears as an argument (`echo whitaker --all`) is not the program.
+/// Returns the program a command executes (its first word after leading assignments and any `env`
+/// wrapper) and the arguments after it; `echo whitaker --all` executes `echo`.
 fn program_and_arguments(command: &str) -> Option<(&str, &str)> {
     let mut rest = after_assignments(command.trim());
     loop {
@@ -85,8 +84,7 @@ fn executed_program(command: &str) -> Option<&str> {
     program_and_arguments(command).map(|(program, _)| program)
 }
 
-/// Returns the Cargo subcommand a command runs: the first argument that is neither an option nor a
-/// `+toolchain`, so `cargo help clippy` runs `help`, not Clippy.
+/// Returns the Cargo subcommand a command runs, so `cargo help clippy` runs `help`, not Clippy.
 fn cargo_subcommand(command: &str) -> Option<&str> {
     let (program, arguments) = program_and_arguments(command)?;
     if !names_program(program, "cargo") {
@@ -97,9 +95,8 @@ fn cargo_subcommand(command: &str) -> Option<&str> {
         .find(|word| !word.starts_with('-') && !word.starts_with('+'))
 }
 
-/// The inherited settings the Whitaker route must clear, so its installer-managed toolchain takes
-/// none of the caller's: encoded flags, the build table's flags, target, the linker and rustflags
-/// of each supported host's target, and the C compiler's flags. `RUSTFLAGS` and the development
+/// The inherited settings the Whitaker route must clear: encoded and build flags, target, each
+/// host's linker and rustflags, and the C compiler's flags. `RUSTFLAGS` and the development
 /// backend are assigned rather than cleared.
 const WHITAKER_CLEARED: [&str; 11] = [
     "CARGO_ENCODED_RUSTFLAGS",
@@ -153,9 +150,12 @@ fn whitaker_route_problems(recipe: &str, host: &str) -> Vec<String> {
             "Whitaker must assign RUSTFLAGS the warning policy alone: {whitaker}"
         ));
     }
-    if !words.contains(&"CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm") {
+    if !words.contains(&"CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
+        || !words.contains(&"CARGO_UNSTABLE_CODEGEN_BACKEND=true")
+    {
         problems.push(format!(
-            "Whitaker must select LLVM for the development profile: {whitaker}"
+            "Whitaker must select LLVM for the development profile and opt Dylint's driver build \
+             into the backend key: {whitaker}"
         ));
     }
     if words.iter().any(|word| {
@@ -234,11 +234,12 @@ const WHITAKER_OK: &str = concat!(
     "-u CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER ",
     "-u CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS -u CFLAGS -u LDFLAGS ",
     "RUSTFLAGS=\"-D warnings\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm ",
+    "CARGO_UNSTABLE_CODEGEN_BACKEND=true ",
     "DYLINT_RUSTFLAGS=\"-D warnings\" whitaker --all -- --all-targets --all-features",
 );
 
 /// Each way of breaking the Whitaker route, named, as a canned recipe.
-fn broken_recipes() -> [(&'static str, String); 9] {
+fn broken_recipes() -> [(&'static str, String); 10] {
     [
         (
             "echoed",
@@ -262,6 +263,10 @@ fn broken_recipes() -> [(&'static str, String); 9] {
         (
             "no LLVM override",
             WHITAKER_OK.replace("CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm ", ""),
+        ),
+        (
+            "no backend opt-in",
+            WHITAKER_OK.replace("CARGO_UNSTABLE_CODEGEN_BACKEND=true ", ""),
         ),
         (
             "encoded flags",
