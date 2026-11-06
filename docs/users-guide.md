@@ -12,15 +12,17 @@ Application projects render `src/main.rs`, `src/lib.rs`, release automation, and
 
 Default development builds keep no incremental state and no debug information
 (`[profile.dev]` sets `incremental = false` and `debug = 0`), so a debugger
-sees no symbols; set `CARGO_PROFILE_DEV_DEBUG=true` to debug, or
-`CARGO_INCREMENTAL=1` to rebuild incrementally.
+sees no source-level debug information; set `CARGO_PROFILE_DEV_DEBUG=true` to
+debug, or `CARGO_INCREMENTAL=1` to rebuild incrementally. `.cargo/config.toml`
+also sets `[unstable] embed-metadata = false`, which builds dependencies
+without embedded metadata.
 
 Development builds use Cranelift for debug code generation. On Linux targets,
 `.cargo/config.toml` configures clang to link with `mold` so local debug builds
 link quickly. Coverage generation uses `lld` instead because LLVM coverage
 tools expect LLVM-compatible linker behaviour.
 
-The `test`, `lint`, `typecheck` and `build` targets keep any exported
+The `test`, `typecheck`, `build` and `lint-clippy` targets keep any exported
 `RUSTFLAGS` and add `-Zthreads=8`, plus the `mold` linker flag when both the
 build host and the compilation target are Linux. `make release` adds neither
 flag and passes an exported `RUSTFLAGS` through. To build for another target,
@@ -40,14 +42,15 @@ The generated `Makefile` exposes these public targets:
 
 - `make all` runs formatting checks, linting, and tests.
 - `make check-fmt` verifies Rust formatting.
-- `make lint` runs rustdoc, Clippy, and Whitaker with warnings denied. It is
-  the aggregate of two targets you can run alone: `make lint-clippy` (rustdoc
-  and Clippy, which take the build standard's flags) and `make lint-whitaker`.
+- `make lint` runs rustdoc, Clippy, and Whitaker with warnings denied. The
+  Whitaker half ignores an exported `RUSTFLAGS` and assigns its own. It is the
+  aggregate of two targets you can run alone: `make lint-clippy` (rustdoc and
+  Clippy, which take the build standard's flags) and `make lint-whitaker`.
   Whitaker builds with its own installer-managed toolchain, so `lint-whitaker`
-  clears inherited Rust, target, linker, C compiler and backend settings,
-  including `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS` and `CARGO_BUILD_RUSTFLAGS`,
-  and receives the warning policy through `DYLINT_RUSTFLAGS`; it uses the
-  repository's Cargo defaults.
+  clears inherited encoded flags, target, linker and C compiler settings,
+  assigns `RUSTFLAGS` the warning policy alone, selects LLVM for the
+  development profile, and receives the warning policy through
+  `DYLINT_RUSTFLAGS`; it takes none of the standard's development flags.
 - `make test` runs `cargo nextest run` when cargo-nextest is installed and
   falls back to `cargo test` otherwise. All projects also run doctests.
 - `make build` builds the debug target.
