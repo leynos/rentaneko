@@ -160,24 +160,24 @@ source in `.cargo/config.toml` enables the parallel `rustc` frontend with
 an assigned `RUSTFLAGS` replaces them all, so the Makefile restates both flags
 as `STANDARD_RUSTFLAGS` for the targets that assign `RUSTFLAGS`, adding them to
 any `RUSTFLAGS` the recipe inherits (setup-rust exports one in CI) rather than
-replacing it; every `lint` command assigns it too. The Makefile adds `mold`
-only when both the host and the compilation target (`CARGO_BUILD_TARGET`, when
-set) are Linux; `CARGO_BUILD_TARGET=host-tuple` names the host's own triple, so
-it counts as the host. Make reads the target from that variable alone, so a
-`--target` in `CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` makes the
-development targets stop with an error telling the caller to set
-`CARGO_BUILD_TARGET` instead, on any host, whether or not `mold` would apply.
-The recipes put an inherited `RUSTFLAGS` first, ahead of the flags they append,
-and the contract checks that order over generated sequences of caller flags with
-`proptest`. `make release` assigns the inherited `RUSTFLAGS`, which is empty
-when the caller exports none (a bare `cargo build --release` still takes both
-flags, because Cargo does not select `rustflags` by profile) and coverage
-assigns its own, so neither takes the standard flags.
-`tests/build_standard_contract.rs` holds the configuration sources and those
-recipes to this. Coverage generation holds the development profile on LLVM,
-because `-Cinstrument-coverage` is LLVM-only and the development profile
-selects Cranelift, and uses `lld` because LLVM coverage tooling expects
-LLVM-compatible linker behaviour.
+replacing it; `lint-clippy` assigns it too. `lint-whitaker` is the exception
+below. The Makefile adds `mold` only when both the host and the compilation
+target (`CARGO_BUILD_TARGET`, when set) are Linux;
+`CARGO_BUILD_TARGET=host-tuple` names the host's own triple, so it counts as
+the host. Make reads the target from that variable alone, so a `--target` in
+`CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` makes the development targets
+stop with an error telling the caller to set `CARGO_BUILD_TARGET` instead, on
+any host, whether or not `mold` would apply. The recipes put an inherited
+`RUSTFLAGS` first, ahead of the flags they append, and the contract checks that
+order over generated sequences of caller flags with `proptest`. `make release`
+assigns the inherited `RUSTFLAGS`, which is empty when the caller exports none
+(a bare `cargo build --release` still takes both flags, because Cargo does not
+select `rustflags` by profile) and coverage assigns its own, so neither takes
+the standard flags. `tests/build_standard_contract.rs` holds the configuration
+sources and those recipes to this. Coverage generation holds the development
+profile on LLVM, because `-Cinstrument-coverage` is LLVM-only and the
+development profile selects Cranelift, and uses `lld` because LLVM coverage
+tooling expects LLVM-compatible linker behaviour.
 
 CI runs the doctests outside the Makefile, in a standalone `Run doctests` step
 of `ci.yml` that calls `cargo test --doc` directly, so the Makefile's
@@ -189,6 +189,31 @@ instrument coverage, so `make coverage` also sets
 `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm` on the `cargo llvm-cov` command itself.
 `tests/build_standard_contract.rs` reads both: the doctest step's flags, and
 the coverage command's backend selection, and fails if either is dropped.
+
+`make lint` runs `lint-clippy` (rustdoc and Clippy, which take the standard's
+flags) and `lint-whitaker`. Whitaker builds with its own installer-managed
+toolchain, which must not inherit the development flags. The route is one `env`
+prefix on the Whitaker command: it clears the inherited encoded flags, target
+and linker settings, assigns `RUSTFLAGS` the warning policy alone, sets
+`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, and also passes the warning policy
+through `DYLINT_RUSTFLAGS`. Assigning `RUSTFLAGS` matters: with it unset, Cargo
+still reads the repository's `rustflags` and the route would carry the parallel
+frontend and the `mold` flag. The LLVM override displaces the Cranelift default
+that `.cargo/config.toml` gives the development profile, and
+`CARGO_UNSTABLE_CODEGEN_BACKEND=true` opts in the temporary Cargo project where
+Dylint builds its driver, which cannot discover the root configuration that
+enables the unstable profile key. The contract reads `make -n lint-whitaker` on
+a Linux and a macOS host for exactly that, and the CI Whitaker step still
+provisions the Cranelift component with `cranelift: 'true'`.
+
+The Concordat `rust-dev-build-footprint` rule keeps default development builds
+small. `Cargo.toml` sets `incremental = false` and `debug = 0` in
+`[profile.dev]`, which the test profile inherits, and `.cargo/config.toml` sets
+`[unstable] embed-metadata = false`, the native Cargo setting for dated
+nightlies from 2026-07-31. The trade-off is that a debugger sees no symbols or
+line tables in a default development build and every rebuild recompiles whole
+crates. To debug, run with `CARGO_PROFILE_DEV_DEBUG=true`; to rebuild
+incrementally, set `CARGO_INCREMENTAL=1`. The contract holds all three settings.
 
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
 full generated workflow locally on Linux.

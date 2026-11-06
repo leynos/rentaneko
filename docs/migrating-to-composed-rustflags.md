@@ -1,8 +1,8 @@
 # Migrating to composed `RUSTFLAGS`
 
-This note covers the change to how the `test`, `lint`, `typecheck` and `build`
-Make targets handle `RUSTFLAGS` and target selection. It applies to the next
-pre-1.0 minor release.
+This note covers the change to how the `test`, `lint-clippy`, `typecheck` and
+`build` Make targets handle `RUSTFLAGS` and target selection. It applies to the
+next pre-1.0 minor release.
 
 ## What changed
 
@@ -13,6 +13,14 @@ pre-1.0 minor release.
 - A `--target` in `CARGO_FLAGS`, `TEST_FLAGS` or `CLIPPY_FLAGS` now stops the
   targets with an error, because Make cannot read the target from those
   variables to decide whether `mold` applies.
+
+- `lint-whitaker` is not one of them. It clears the encoded flags and target
+  settings, assigns `RUSTFLAGS` the warning policy alone, and sets
+  `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, so an exported `RUSTFLAGS` no
+  longer reaches Whitaker.
+- Default development builds keep no incremental state, no debug information and
+  no embedded dependency metadata. Set `CARGO_PROFILE_DEV_DEBUG=true` to debug
+  or `CARGO_INCREMENTAL=1` to rebuild incrementally.
 
 ## What callers need to do
 

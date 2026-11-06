@@ -12,6 +12,9 @@
 
 [unstable]
 codegen-backend = true
+# The native Cargo setting for the development footprint rule: dependencies are
+# built without embedded metadata (nightly-2026-07-31 and later).
+embed-metadata = false
 
 [profile.dev]
 codegen-backend = "cranelift"
