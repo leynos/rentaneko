@@ -186,7 +186,7 @@ prototype. Candidate future Architecture Decision Records (ADRs) are:
 
 ## References
 
-- [ADR 001: Use Simulacat Core for the Octocrab spike](adr-001-use-simulacat-core-for-octocrab-spike.md).
+- [ADR 001: Use Simulacat Core for the Octocrab spike](adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md).
 - Podbot design:
   <https://github.com/leynos/podbot/blob/main/docs/podbot-design.md>.
 - Podbot roadmap:
