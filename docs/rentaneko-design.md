@@ -5,7 +5,7 @@
   maintainers.
 - **Scope:** Walking skeleton for the Podbot 3.3.1 token-writer spike.
 - **Companion documents:** [terms of reference](terms-of-reference.md),
-  [ADR 001](adr-001-use-simulacat-core-for-octocrab-spike.md), [roadmap](roadmap.md),
+  [ADR 001](adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md), [roadmap](roadmap.md),
   and [repository layout](repository-layout.md).
 - **Last updated:** 2026-06-21.
 
@@ -407,7 +407,7 @@ plus a runner integration test that binds port zero and reports the actual port.
 ## References
 
 - [Rentaneko terms of reference](terms-of-reference.md).
-- [ADR 001: Use Simulacat Core for the Octocrab spike](adr-001-use-simulacat-core-for-octocrab-spike.md).
+- [ADR 001: Use Simulacat Core for the Octocrab spike](adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md).
 - Podbot design:
   <https://github.com/leynos/podbot/blob/main/docs/podbot-design.md>.
 - Podbot roadmap:

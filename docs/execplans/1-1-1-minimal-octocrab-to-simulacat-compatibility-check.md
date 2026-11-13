@@ -14,7 +14,7 @@ installation-token route and read back the fixed token `FAKE_GITHUB_TOKEN`
 without Rentaneko patching the response. Roadmap task 1.1.1 is the *fail-fast
 compatibility checkpoint* that proves or disproves this before any process
 lifecycle machinery is built. See [rentaneko-design.md](../rentaneko-design.md)
-§5 and [ADR 001](../adr-001-use-simulacat-core-for-octocrab-spike.md).
+§5 and [ADR 001](../adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md).
 
 The single irreducible fact only real Rust can prove (beyond what a one-line
 `curl` already shows) is this: `octocrab` 0.51.0 constructs an RS256 JSON Web
@@ -736,7 +736,7 @@ Relevant existing files, by full repository-relative path:
   §6 (simulator state contract), §8 (event contract / `version` discriminant),
   §10 (octocrab construction), §12 (upstream dependency), §13 (failure modes),
   §14 (verification strategy).
-- `docs/adr-001-use-simulacat-core-for-octocrab-spike.md` — the backend
+- `docs/adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md` — the backend
   decision; the in-process stub is a diagnostic option only.
 - `docs/roadmap.md` — tasks 1.1.1 and 1.1.2.
 - `docs/repository-layout.md`, `docs/contents.md` — update when files or
@@ -1136,7 +1136,7 @@ pattern into a throwaway checkpoint.
 Reference while implementing:
 
 - [rentaneko-design.md](../rentaneko-design.md) §§5, 6, 8, 10, 12, 13, 14.
-- [adr-001-use-simulacat-core-for-octocrab-spike.md](../adr-001-use-simulacat-core-for-octocrab-spike.md).
+- [adr-0001-use-simulacat-core-for-octocrab-spike.md](../adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md).
 - [roadmap.md](../roadmap.md) tasks 1.1.1 and 1.1.2.
 - [rstest-bdd-users-guide.md](../rstest-bdd-users-guide.md) — feature files,
   step macros, and §"Async scenario execution".

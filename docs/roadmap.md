@@ -2,7 +2,7 @@
 
 This roadmap turns the
 [terms of reference](terms-of-reference.md), [prototype design](rentaneko-design.md),
-and [ADR 001](adr-001-use-simulacat-core-for-octocrab-spike.md) into a
+and [ADR 001](adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md) into a
 short-circuited build order for the Podbot 3.3.1 spike. It follows the Goals,
 Ideas, Steps, and Tasks (GIST) model: each phase states a falsifiable idea,
 each step answers one delivery question, and each task is a review-sized
@@ -26,7 +26,8 @@ proof.
 This step answers whether the existing simulator route is sufficient for the
 walking skeleton. Its outcome decides whether Rentaneko can proceed to process
 lifecycle work or must first request Simulacat Core compatibility changes. See
-rentaneko-design.md §5 and adr-001-use-simulacat-core-for-octocrab-spike.md.
+rentaneko-design.md §5 and
+adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md.
 
 - [x] 1.1.1. Add the minimal Octocrab-to-Simulacat compatibility checkpoint.
   - See rentaneko-design.md §5.

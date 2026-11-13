@@ -20,7 +20,7 @@ compact and omits build output such as `target/`.
 │       ├── coverage-main.yml
 
 ├── docs/
-│   ├── adr-001-use-simulacat-core-for-octocrab-spike.md
+│   ├── adrs/adr-0001-use-simulacat-core-for-octocrab-spike.md
 │   ├── contents.md
 │   ├── developers-guide.md
 │   ├── rentaneko-design.md
