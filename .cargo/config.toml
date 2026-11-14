@@ -16,8 +16,9 @@ codegen-backend = true
 # built without embedded metadata (nightly-2026-07-31 and later).
 embed-metadata = false
 
-[profile.dev]
-codegen-backend = "cranelift"
+# Cranelift disabled estate-wide on 14 November 2026 (concordat ADR; review 14 May 2027). Uncomment to opt back in.
+# [profile.dev]
+# codegen-backend = "cranelift"
 
 [build]
 rustflags = ["-Zthreads=8"]

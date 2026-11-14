@@ -66,8 +66,8 @@ fn the_ci_doctest_step_restates_both_flags() {
     );
 }
 
-/// Instrumentation needs LLVM, and the development profile defaults to
-/// Cranelift, so the coverage recipe must select LLVM on the command itself.
+/// Instrumentation needs LLVM, and an opted-in or inherited Cranelift selection
+/// cannot instrument, so the coverage recipe must select LLVM on the command itself.
 #[test]
 fn the_coverage_recipe_selects_llvm() {
     let stdout = dry_run("coverage", Host::Linux, None).expect("run `make -n coverage`");

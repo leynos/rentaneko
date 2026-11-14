@@ -116,9 +116,10 @@ const WHITAKER_CLEARED: [&str; 11] = [
 /// line whose executed program is Whitaker (after assignments and the `env` wrapper), so a line
 /// that only prints its name does not count; it must clear every inherited setting, assign
 /// `RUSTFLAGS` the warning policy alone (an unset `RUSTFLAGS` leaves Cargo reading the
-/// configuration's flags), select LLVM for the development profile that the configuration gives
-/// Cranelift, assign no encoded or build flags, pass the warning policy through Dylint's input and
-/// keep the target and feature selections as words, since other Cargo options may follow them.
+/// configuration's flags), select LLVM for the development profile so an opted-in or inherited
+/// Cranelift selection cannot apply, assign no encoded or build flags, pass the warning policy
+/// through Dylint's input and keep the target and feature selections as words, since other Cargo
+/// options may follow them.
 fn whitaker_route_problems(recipe: &str, host: &str) -> Vec<String> {
     let Some(whitaker) = recipe
         .lines()
@@ -203,9 +204,9 @@ fn lint_problems(recipe: &str) -> Vec<String> {
 /// Whitaker builds with its own installer-managed toolchain, so its route clears every inherited
 /// flag, backend and linker setting instead of restating the standard, and passes the warning
 /// policy through Dylint's own input. It assigns `RUSTFLAGS` the warning policy alone and selects
-/// LLVM for the development profile, so none of the repository's development flags or its
-/// Cranelift default reach the checked crate. The route runs on Linux and macOS
-/// hosts, so both are read.
+/// LLVM for the development profile, so none of the repository's development flags or any
+/// opted-in or inherited Cranelift selection reach the checked crate. The route runs on Linux and
+/// macOS hosts, so both are read.
 #[test]
 fn whitaker_clears_inherited_settings_and_assigns_its_own_flags() {
     for host in [Host::Linux, Host::Darwin] {

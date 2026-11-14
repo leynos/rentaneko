@@ -126,8 +126,8 @@ lint-clippy: ## Run rustdoc and Clippy with warnings denied
 # clears the encoded flags and every target-specific source, assigns the
 # warning policy as its own `RUSTFLAGS` (an unset value would leave Cargo
 # reading the configuration's `rustflags`), and selects LLVM for the
-# development profile, whose Cranelift default the configuration would
-# otherwise apply (CARGO_UNSTABLE_CODEGEN_BACKEND opts in the temporary Cargo
+# development profile, so an inherited or opted-in Cranelift selection cannot
+# apply (CARGO_UNSTABLE_CODEGEN_BACKEND opts in the temporary Cargo
 # project where Dylint builds its driver, which cannot discover the root
 # `.cargo/config.toml` that enables the unstable profile key). Dylint reads the warning policy from DYLINT_RUSTFLAGS.
 lint-whitaker: ## Run the Whitaker Dylint suite with clean driver inputs and warnings denied

@@ -153,8 +153,14 @@ runner with the owned Bun process and Rust process handle.
 
 ## Tooling
 
-Development builds use Cranelift for debug code generation. Every `rustflags`
-source in `.cargo/config.toml` enables the parallel `rustc` frontend with
+LLVM is the default codegen backend: the estate standard dropped Cranelift,
+with review due 14 May 2027 (see the
+[concordat decision record](https://github.com/leynos/concordat/blob/main/docs/adrs/adr-0004-cranelift-is-not-part-of-the-rust-build-standard.md)).
+The Cranelift selection in `.cargo/config.toml` is commented out. To opt in,
+pass `--config 'profile.dev.codegen-backend="cranelift"'`; Cranelift does not
+unwind, so no test may rely on a caught panic under it. An inherited
+`CARGO_PROFILE_*_CODEGEN_BACKEND` can still select it. Every `rustflags` source
+in `.cargo/config.toml` enables the parallel `rustc` frontend with
 `-Zthreads=8`, and on Linux targets it also configures clang to link with
 `mold` so debug builds link quickly. Cargo applies one `rustflags` source and
 an assigned `RUSTFLAGS` replaces them all, so the Makefile restates both flags
@@ -176,7 +182,7 @@ select `rustflags` by profile) and coverage assigns its own, so neither takes
 the standard flags. `tests/build_standard_contract.rs` holds the configuration
 sources and those recipes to this. Coverage generation holds the development
 profile on LLVM, because `-Cinstrument-coverage` is LLVM-only and the
-development profile selects Cranelift, and uses `lld` because LLVM coverage
+development profile may select Cranelift, and uses `lld` because LLVM coverage
 tooling expects LLVM-compatible linker behaviour.
 
 CI runs the doctests outside the Makefile, in a standalone `Run doctests` step
@@ -184,8 +190,8 @@ of `ci.yml` that calls `cargo test --doc` directly, so the Makefile's
 `STANDARD_RUSTFLAGS` cannot reach it. The step therefore assigns its own
 `RUSTFLAGS` with `-D warnings`, the frontend flag and the Linux linker flag,
 because an assigned `RUSTFLAGS` replaces every `rustflags` source in
-`.cargo/config.toml`. Development builds default to Cranelift, which cannot
-instrument coverage, so `make coverage` also sets
+`.cargo/config.toml`. Cranelift, which an opt-in or an inherited profile
+variable can select, cannot instrument coverage, so `make coverage` also sets
 `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm` on the `cargo llvm-cov` command itself.
 `tests/build_standard_contract.rs` reads both: the doctest step's flags, and
 the coverage command's backend selection, and fails if either is dropped.
@@ -198,8 +204,8 @@ and linker settings, assigns `RUSTFLAGS` the warning policy alone, sets
 `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, and also passes the warning policy
 through `DYLINT_RUSTFLAGS`. Assigning `RUSTFLAGS` matters: with it unset, Cargo
 still reads the repository's `rustflags` and the route would carry the parallel
-frontend and the `mold` flag. The LLVM override displaces the Cranelift default
-that `.cargo/config.toml` gives the development profile, and
+frontend and the `mold` flag. The LLVM override displaces any Cranelift
+selection inherited from the environment, and
 `CARGO_UNSTABLE_CODEGEN_BACKEND=true` opts in the temporary Cargo project where
 Dylint builds its driver, which cannot discover the root configuration that
 enables the unstable profile key. The contract reads `make -n lint-whitaker` on

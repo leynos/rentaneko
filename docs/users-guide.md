@@ -17,7 +17,7 @@ debug, or `CARGO_INCREMENTAL=1` to rebuild incrementally. `.cargo/config.toml`
 also sets `[unstable] embed-metadata = false`, which builds dependencies
 without embedded metadata.
 
-Development builds use Cranelift for debug code generation. On Linux targets,
+Development builds use LLVM, the default codegen backend. On Linux targets,
 `.cargo/config.toml` configures clang to link with `mold` so local debug builds
 link quickly. Coverage generation uses `lld` instead because LLVM coverage
 tools expect LLVM-compatible linker behaviour.
