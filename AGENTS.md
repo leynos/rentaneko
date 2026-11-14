@@ -225,8 +225,9 @@ project:
       `cargo clippy --all-targets --all-features -- -D warnings`. Both are
       composed with `-D warnings` and the build standard flags added to any
       inherited `RUSTFLAGS`: `-Zthreads=8`, and `-Clink-arg=-fuse-ld=mold` on
-      Linux hosts building for a Linux target. The `CLIPPY_FLAGS` and
-      `CARGO_FLAGS` defaults are `--all-targets --all-features`.
+      Linux hosts building for a Linux target. The `CARGO_FLAGS` default is
+      `--all-targets --all-features`, and `CLIPPY_FLAGS` defaults to
+      `$(CARGO_FLAGS) -- $(RUST_FLAGS)`.
     - `lint-whitaker` runs `whitaker --all -- --all-targets --all-features`
       with a cleared build environment, `RUSTFLAGS="-D warnings"`, and LLVM
       selected for the development profile, so an inherited Cranelift selection
