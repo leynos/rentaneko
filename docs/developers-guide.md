@@ -200,9 +200,8 @@ the coverage command's backend selection, and fails if either is dropped.
 because a test that changes the process-wide environment or working directory
 forces the runner to serialize tests. Inject an environment object, pass a
 directory in, or isolate the change to a child process with `Command::env` and
-`Command::current_dir`. A site that cannot yet migrate carries
-`#[expect(clippy::disallowed_methods, reason = ...)]`, which warns once the
-site is gone.
+`Command::current_dir`. Do not suppress these entries for in-process test
+mutation.
 
 `make lint` runs `lint-clippy` (rustdoc and Clippy, which take the standard's
 flags) and `lint-whitaker`. Whitaker builds with its own installer-managed
