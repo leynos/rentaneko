@@ -50,18 +50,34 @@ fn make_default_goal_in(
     makefile: &str,
     environment: &[(&str, &str)],
 ) -> std::io::Result<GoalProbe> {
-    use std::{
-        io::Write as _,
-        process::{Command as Process, Stdio},
-    };
+    let mut command = make_command(environment);
+    let output = run_make_on(&mut command, makefile)?;
+    Ok(GoalProbe {
+        goal: default_goal_in_database(&output),
+        diagnostic: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
 
-    let mut command = Process::new("make");
+/// Builds the `make` command that reads a Makefile from standard input and
+/// prints its database, with `environment` set and [`INHERITED_FLAGS`] removed.
+fn make_command(environment: &[(&str, &str)]) -> std::process::Command {
+    let mut command = std::process::Command::new("make");
     command
         .args(["-f", "-", "-pn"])
         .envs(environment.iter().copied());
     for flag in INHERITED_FLAGS {
         command.env_remove(flag);
     }
+    command
+}
+
+/// Feeds `makefile` to `command` on standard input and collects its output.
+fn run_make_on(
+    command: &mut std::process::Command,
+    makefile: &str,
+) -> std::io::Result<std::process::Output> {
+    use std::{io::Write as _, process::Stdio};
+
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -72,18 +88,24 @@ fn make_default_goal_in(
         .take()
         .ok_or_else(|| std::io::Error::other("make's stdin was not piped"))?
         .write_all(makefile.as_bytes())?;
-    let output = child.wait_with_output()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    let goal = output.status.success().then_some(()).and_then(|()| {
-        text.lines().find_map(|line| {
-            let (name, value) = line.split_once(" = ").or_else(|| line.split_once(" := "))?;
-            (name == ".DEFAULT_GOAL").then(|| value.to_owned())
-        })
-    });
-    Ok(GoalProbe {
-        goal,
-        diagnostic: String::from_utf8_lossy(&output.stderr).into_owned(),
-    })
+    child.wait_with_output()
+}
+
+/// Reads the `.DEFAULT_GOAL` assignment out of make's database dump, when make
+/// succeeded and the dump holds one.
+fn default_goal_in_database(output: &std::process::Output) -> Option<String> {
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(default_goal_value)
+}
+
+/// Returns the value of a `.DEFAULT_GOAL = value` or `:=` line, if it is one.
+fn default_goal_value(line: &str) -> Option<String> {
+    let (name, value) = line.split_once(" = ").or_else(|| line.split_once(" := "))?;
+    (name == ".DEFAULT_GOAL").then(|| value.to_owned())
 }
 
 /// The reader agrees with GNU make on every Makefile it can be run on, so the

@@ -21,6 +21,8 @@ use std::{error::Error, process::Command};
 use cap_std::{ambient_authority, fs::Dir};
 use rstest::rstest;
 
+#[path = "build_standard/whitaker_flags.rs"]
+mod whitaker_flags;
 #[path = "build_standard/whitaker_footprint.rs"]
 mod whitaker_footprint;
 #[path = "build_standard/workflow_steps.rs"]
