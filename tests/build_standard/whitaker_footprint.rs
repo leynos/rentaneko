@@ -6,7 +6,18 @@
 
 use cap_std::{ambient_authority, fs::Dir};
 
-use super::{Host, dry_run};
+use super::{
+    Host,
+    dry_run,
+    whitaker_flags::{
+        backend_problem,
+        dylint_input_problem,
+        encoded_flags_problem,
+        missing_options,
+        rustflags_problem,
+        uncleared_settings,
+    },
+};
 
 /// Returns whether a word names a program: its final path component matches.
 fn names_program(word: &str, program: &str) -> bool {
@@ -95,23 +106,6 @@ fn cargo_subcommand(command: &str) -> Option<&str> {
         .find(|word| !word.starts_with('-') && !word.starts_with('+'))
 }
 
-/// The inherited settings the Whitaker route must clear: encoded and build flags, target, each
-/// host's linker and rustflags, and the C compiler's flags. `RUSTFLAGS` and the development
-/// backend are assigned rather than cleared.
-const WHITAKER_CLEARED: [&str; 11] = [
-    "CARGO_ENCODED_RUSTFLAGS",
-    "CARGO_BUILD_RUSTFLAGS",
-    "CARGO_BUILD_TARGET",
-    "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER",
-    "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS",
-    "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER",
-    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS",
-    "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER",
-    "CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS",
-    "CFLAGS",
-    "LDFLAGS",
-];
-
 /// Returns the complaints about the `make -n lint-whitaker` output of one host. The command is the
 /// line whose executed program is Whitaker (after assignments and the `env` wrapper), so a line
 /// that only prints its name does not count; it must clear every inherited setting, assign
@@ -129,53 +123,13 @@ fn whitaker_route_problems(recipe: &str, host: &str) -> Vec<String> {
             "`make lint-whitaker` on {host} must execute the Whitaker program: {recipe}"
         )];
     };
-    let mut problems = Vec::new();
-    for setting in WHITAKER_CLEARED {
-        if !whitaker.contains(&format!("-u {setting} ")) {
-            problems.push(format!(
-                "Whitaker on {host} must remove inherited {setting}: {whitaker}"
-            ));
-        }
-    }
     let words: Vec<&str> = whitaker.split_whitespace().collect();
-    let assigned = words
-        .iter()
-        .filter(|word| word.starts_with("RUSTFLAGS="))
-        .count();
-    let value = whitaker
-        .split_once(" RUSTFLAGS=\"")
-        .and_then(|(_, rest)| rest.split_once('"'))
-        .map(|(value, _)| value);
-    if assigned != 1 || value != Some("-D warnings") {
-        problems.push(format!(
-            "Whitaker must assign RUSTFLAGS the warning policy alone: {whitaker}"
-        ));
-    }
-    if !words.contains(&"CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
-        || !words.contains(&"CARGO_UNSTABLE_CODEGEN_BACKEND=true")
-    {
-        problems.push(format!(
-            "Whitaker must select LLVM for the development profile and opt Dylint's driver build \
-             into the backend key: {whitaker}"
-        ));
-    }
-    if words.iter().any(|word| {
-        word.starts_with("CARGO_ENCODED_RUSTFLAGS=") || word.starts_with("CARGO_BUILD_RUSTFLAGS=")
-    }) {
-        problems.push(format!(
-            "Whitaker must not assign encoded or build flags: {whitaker}"
-        ));
-    }
-    if !whitaker.contains("DYLINT_RUSTFLAGS=\"-D warnings") {
-        problems.push(format!(
-            "warnings must reach the check through Dylint's input: {whitaker}"
-        ));
-    }
-    for option in ["--all-targets", "--all-features"] {
-        if !whitaker.split_whitespace().any(|word| word == option) {
-            problems.push(format!("the check must keep {option}: {whitaker}"));
-        }
-    }
+    let mut problems = uncleared_settings(whitaker, host);
+    problems.extend(rustflags_problem(whitaker, &words));
+    problems.extend(backend_problem(whitaker, &words));
+    problems.extend(encoded_flags_problem(whitaker, &words));
+    problems.extend(dylint_input_problem(whitaker));
+    problems.extend(missing_options(whitaker, &words));
     problems
 }
 
