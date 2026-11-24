@@ -219,6 +219,14 @@ enables the unstable profile key. The contract reads `make -n lint-whitaker` on
 a Linux and a macOS host for exactly that, and the CI Whitaker step still
 provisions the Cranelift component with `cranelift: 'true'`.
 
+Cognitive complexity is not gated by Clippy. Clippy's `cognitive_complexity`
+scores code after macro expansion, so it counts branching a macro generated,
+and neither `Cargo.toml` nor `clippy.toml` enables it. Whitaker's experimental
+`macro_aware_cognitive_complexity` gates it at `max_complexity = 9`,
+CodeScene's ceiling. `dylint.toml` opts in with
+`[whitaker] experimental = ["macro_aware_cognitive_complexity"]`. Fix a finding
+by extracting named helpers, never by raising the threshold.
+
 The Concordat `rust-dev-build-footprint` rule keeps default development builds
 small. `Cargo.toml` sets `incremental = false` and `debug = 0` in
 `[profile.dev]`, which the test profile inherits, and `.cargo/config.toml` sets
