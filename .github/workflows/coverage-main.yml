@@ -79,12 +79,12 @@ jobs:
         with:
           output-path: lcov.info
           format: lcov
-      # The doctests are the only part of `make test` the coverage step does
-      # not run. The step denies warnings as `make test`'s doctest line does;
-      # the step restates the build standard's frontend and linker flags beside
-      # the warning denial, because an assigned RUSTFLAGS replaces every
-      # `rustflags` source in `.cargo/config.toml`.
-      # tests/workflow_suite_contract.rs holds the split.
+          # The doctests are the only part of `make test` the coverage step does
+          # not run. The step denies warnings as `make test`'s doctest line does;
+          # the step restates the build standard's frontend and linker flags beside
+          # the warning denial, because an assigned RUSTFLAGS replaces every
+          # `rustflags` source in `.cargo/config.toml`.
+          # tests/workflow_suite_contract.rs holds the split.
           with-ratchet: 'true'
       - name: Upload coverage data to CodeScene
         if: github.ref == 'refs/heads/main'
