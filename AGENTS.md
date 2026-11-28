@@ -234,7 +234,8 @@ project:
       with a cleared build environment, `RUSTFLAGS="-D warnings"`, and LLVM
       selected for the development profile, so an inherited Cranelift selection
       cannot apply.
-    - `interrogate` checks Python docstring coverage under `tests/` and fails
+    - `interrogate` checks Python docstring coverage under `scripts/` and
+      `tests/` and fails
       on any `MISSED` row, even when the rounded percentage passes.
   - `make test` runs `cargo nextest run --all-targets --all-features` when
     `cargo-nextest` is installed, and `cargo test --all-targets --all-features`
