@@ -31,7 +31,9 @@
 - **Keep file size manageable.** No single code file may be longer than 400
   lines.  Long switch statements or dispatch tables should be broken up by
   feature and constituents colocated with targets. Large blocks of test data
-  should be moved to external data files.
+  should be moved to external data files. A file vendored byte for byte from an
+  upstream, such as `scripts/uv_gate.py`, is exempt, because splitting it would
+  break its canonical digest.
 
 ## Documentation maintenance
 
@@ -232,7 +234,8 @@ project:
       with a cleared build environment, `RUSTFLAGS="-D warnings"`, and LLVM
       selected for the development profile, so an inherited Cranelift selection
       cannot apply.
-    - `interrogate` checks Python docstring coverage under `tests/` and fails
+    - `interrogate` checks Python docstring coverage under `scripts/` and
+      `tests/` and fails
       on any `MISSED` row, even when the rounded percentage passes.
   - `make test` runs `cargo nextest run --all-targets --all-features` when
     `cargo-nextest` is installed, and `cargo test --all-targets --all-features`
