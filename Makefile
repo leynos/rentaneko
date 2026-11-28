@@ -104,8 +104,8 @@ coverage: ## Generate lcov coverage with lld for llvm-tools compatibility
 		$(CARGO) llvm-cov --lcov --output-path lcov.info $(TEST_FLAGS)
 
 # The repository's only Python is the CV-005 workflow contract test under
-# tests/. Interrogate scans each target recursively, subject to its default
-# exclusions.
+# tests/ and the vendored uv helper under scripts/. Interrogate scans each
+# target recursively, subject to its default exclusions.
 INTERROGATE_VERSION ?= 1.7.0
 INTERROGATE_TARGETS ?= scripts tests
 # Level 2 prints a MISSED row per undocumented definition, which the
